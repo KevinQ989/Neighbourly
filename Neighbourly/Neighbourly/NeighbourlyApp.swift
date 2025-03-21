@@ -10,11 +10,17 @@ import SwiftUI
 @main
 struct NeighbourlyApp: App {
     let persistenceController = PersistenceController.shared
-
+    @AppStorage("isLoggedIn") private var isLoggedIn = false
+    
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environment(\.managedObjectContext, persistenceController.container.viewContext)
+            if isLoggedIn {
+                HomePageView()
+                    .environment(\.managedObjectContext, persistenceController.container.viewContext)
+            } else {
+                ContentView(isLoggedIn: $isLoggedIn)
+                    .environment(\.managedObjectContext, persistenceController.container.viewContext)
+            }
         }
     }
 }

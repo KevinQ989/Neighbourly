@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ContentView: View {
+    @Binding var isLoggedIn: Bool
     @State private var email: String = ""
     @State private var isLoading: Bool = false
     
@@ -35,8 +36,10 @@ struct ContentView: View {
                 
                 // Continue button
                 Button(action: {
+                    
                     // Simulate button press
                     withAnimation {
+                        isLoggedIn = true
                         isLoading = true
                     }
                     
@@ -65,7 +68,7 @@ struct ContentView: View {
             }
             
             Spacer()
-            
+        
             // Terms text
             VStack {
                 HStack(spacing: 0) {
@@ -127,6 +130,6 @@ struct ContentView: View {
 
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
-        ContentView()
+        ContentView(isLoggedIn: .constant(false))
     }
 }
