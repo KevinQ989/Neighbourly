@@ -173,7 +173,7 @@ struct RequestCard: View {
 struct CustomTabBar: View {
     var body: some View {
         HStack {
-            ForEach(["house.fill", "plus.circle.fill", "bell.fill", "person.fill"], id: \.self) { icon in
+            ForEach(["house.fill", "plus.circle.fill", "message.fill", "person.fill"], id: \.self) { icon in
                 Spacer()
                 Button(action: {
                     // Handle tab selection
