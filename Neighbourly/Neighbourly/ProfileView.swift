@@ -168,7 +168,7 @@ struct AllReviewsView: View {
 struct TabBar: View {
   var body: some View {
     HStack {
-      ForEach(["house.fill", "plus.circle.fill", "bell.fill", "person.fill"],
+      ForEach(["house.fill", "plus.circle.fill", "message.fill", "person.fill"],
               id: \.self) { icon in
         Spacer()
         Button(action: {
