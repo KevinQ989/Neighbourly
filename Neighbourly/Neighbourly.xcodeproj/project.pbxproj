@@ -6,6 +6,12 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		0A1A9EB22D8E468300620034 /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = 0A1A9EB12D8E468300620034 /* Auth */; };
+		0A1A9EB42D8E468300620034 /* Storage in Frameworks */ = {isa = PBXBuildFile; productRef = 0A1A9EB32D8E468300620034 /* Storage */; };
+		0A1A9EB62D8E468300620034 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 0A1A9EB52D8E468300620034 /* Supabase */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		93E673F52D8C0C96000BA1D7 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -29,9 +35,22 @@
 		93E673FE2D8C0C96000BA1D7 /* NeighbourlyUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NeighbourlyUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		0A1A9EBE2D8E48DA00620034 /* Exceptions for "Neighbourly" folder in "Neighbourly" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 93E673DE2D8C0C95000BA1D7 /* Neighbourly */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		93E673E12D8C0C95000BA1D7 /* Neighbourly */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				0A1A9EBE2D8E48DA00620034 /* Exceptions for "Neighbourly" folder in "Neighbourly" target */,
+			);
 			path = Neighbourly;
 			sourceTree = "<group>";
 		};
@@ -52,6 +71,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0A1A9EB42D8E468300620034 /* Storage in Frameworks */,
+				0A1A9EB22D8E468300620034 /* Auth in Frameworks */,
+				0A1A9EB62D8E468300620034 /* Supabase in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -112,6 +134,9 @@
 			);
 			name = Neighbourly;
 			packageProductDependencies = (
+				0A1A9EB12D8E468300620034 /* Auth */,
+				0A1A9EB32D8E468300620034 /* Storage */,
+				0A1A9EB52D8E468300620034 /* Supabase */,
 			);
 			productName = Neighbourly;
 			productReference = 93E673DF2D8C0C95000BA1D7 /* Neighbourly.app */;
@@ -195,6 +220,9 @@
 			);
 			mainGroup = 93E673D62D8C0C95000BA1D7;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				0A1A9EB02D8E468300620034 /* XCRemoteSwiftPackageReference "supabase-swift" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 93E673E02D8C0C95000BA1D7 /* Products */;
 			projectDirPath = "";
@@ -398,6 +426,7 @@
 				DEVELOPMENT_ASSET_PATHS = "\"Neighbourly/Preview Content\"";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Neighbourly/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -426,6 +455,7 @@
 				DEVELOPMENT_ASSET_PATHS = "\"Neighbourly/Preview Content\"";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Neighbourly/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -552,6 +582,35 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		0A1A9EB02D8E468300620034 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/supabase-community/supabase-swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.5.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		0A1A9EB12D8E468300620034 /* Auth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0A1A9EB02D8E468300620034 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Auth;
+		};
+		0A1A9EB32D8E468300620034 /* Storage */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0A1A9EB02D8E468300620034 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Storage;
+		};
+		0A1A9EB52D8E468300620034 /* Supabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0A1A9EB02D8E468300620034 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Supabase;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 93E673D72D8C0C95000BA1D7 /* Project object */;
 }
