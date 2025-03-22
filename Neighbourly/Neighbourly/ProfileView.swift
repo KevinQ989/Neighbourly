@@ -71,12 +71,12 @@ struct ReviewCardView: View {
     VStack(alignment: .leading, spacing: 8) {
       HStack(alignment: .top) {
         // Reviewer profile image
-        Image(review.reviewerImageName)
-          .resizable()
-          .aspectRatio(contentMode: .fill)
-          .frame(width: 40, height: 40)
-          .clipShape(Circle())
-          .padding(.trailing, 8)
+          Image(review.reviewerImageName)
+                  .resizable()
+                  .aspectRatio(contentMode: .fill)
+                  .frame(width: 40, height: 40)
+                  .clipShape(Circle())
+                  .padding(.trailing, 8)
         
         // Use a vertical stack for the reviewer details
         VStack(alignment: .leading, spacing: 4) {
@@ -238,25 +238,31 @@ struct ProfileView: View {
           VStack(alignment: .leading, spacing: 24) {
             // Profile Header
             HStack(alignment: .center, spacing: 16) {
-              Image(profileImageName)
-                .resizable()
-                .aspectRatio(contentMode: .fill)
-                .frame(width: 80, height: 80)
-                .clipShape(Circle())
-                .overlay(Circle().stroke(Color.white, lineWidth: 2))
-                .shadow(radius: 3)
-              VStack(alignment: .leading, spacing: 4) {
-                Text(name)
-                  .font(.title)
-                  .fontWeight(.bold)
-                Text("@\(username)")
-                  .font(.subheadline)
-                  .foregroundColor(.gray)
-                // Fixed Average Rating Display with a star emoji
-                Text("4.5/5⭐")
-                  .font(.caption)
-                  .foregroundColor(.gray)
-              }
+                Image(profileImageName)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 80, height: 80)
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(Color.white, lineWidth: 2))
+                    .shadow(radius: 3)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(name)
+                        .font(.title)
+                        .fontWeight(.bold)
+                    Text("@\(username)")
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
+                    // Fixed Average Rating Display with a star emoji
+                    Text("4.5/5⭐")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
+                NavigationLink(
+                    destination: EditProfileView()
+                ) {
+                    Text("Edit Profile")
+                        .foregroundColor(.blue)
+                }
               Spacer()
             }
             .padding(.horizontal)
