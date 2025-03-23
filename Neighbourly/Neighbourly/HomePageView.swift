@@ -113,9 +113,6 @@ struct HomePageView: View {
                     }
                     .padding(.vertical)
                 }
-                
-                // Tab bar
-                CustomTabBar()
             }
             .navigationBarHidden(true)
         }
@@ -166,33 +163,6 @@ struct RequestCard: View {
                 .lineLimit(1)
         }
         .frame(width: 140)
-    }
-}
-
-// Custom tab bar
-struct CustomTabBar: View {
-    var body: some View {
-        HStack {
-            ForEach(["house.fill", "plus.circle.fill", "message.fill", "person.fill"], id: \.self) { icon in
-                Spacer()
-                Button(action: {
-                    // Handle tab selection
-                }) {
-                    Image(systemName: icon)
-                        .font(.system(size: 22))
-                        .foregroundColor(icon == "house.fill" ? .black : .gray)
-                }
-                Spacer()
-            }
-        }
-        .padding(.vertical, 10)
-        .background(Color.white)
-        .overlay(
-            Rectangle()
-                .frame(height: 1)
-                .foregroundColor(Color.gray.opacity(0.2)),
-            alignment: .top
-        )
     }
 }
 

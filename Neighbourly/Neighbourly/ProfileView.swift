@@ -319,8 +319,6 @@ struct ProfileView: View {
           }
           .padding(.vertical)
         }
-        Divider()
-        TabBar()
       }
       .navigationBarTitle("Profile", displayMode: .inline)
     }

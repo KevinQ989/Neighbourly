@@ -34,13 +34,6 @@ struct ChatView: View {
     var body: some View {
         NavigationView {
             VStack(spacing: 15) {
-                HStack {
-                    Text("Chats")
-                        .font(.title2)
-                        .bold()
-                    Spacer()
-                }
-                .padding(.horizontal)
                 
                 HStack {
                     FilterButton(title: "All", isSelected: selectedTab == .all) {
@@ -60,10 +53,8 @@ struct ChatView: View {
                     ChatRow(chat: chat, selectedChatId: $selectedChatId)
                 }
                 .listStyle(PlainListStyle())
-                
-                StatusBar()
             }
-            .navigationBarHidden(true)
+            .navigationTitle("Chats")
         }
     }
 }
@@ -138,32 +129,6 @@ struct Chat: Identifiable {
 
 enum ChatFilter {
     case all, requests, offers
-}
-
-struct StatusBar: View {
-    var body: some View {
-        HStack {
-            ForEach(["house.fill", "plus.circle.fill", "message.fill", "person.fill"], id: \ .self) { icon in
-                Spacer()
-                Button(action: {
-                    // Handle tab selection
-                }) {
-                    Image(systemName: icon)
-                        .font(.system(size: 22))
-                        .foregroundColor(icon == "message.fill" ? .black : .gray)
-                }
-                Spacer()
-            }
-        }
-        .padding(.vertical, 10)
-        .background(Color.white)
-        .overlay(
-            Rectangle()
-                .frame(height: 1)
-                .foregroundColor(Color.gray.opacity(0.2)),
-            alignment: .top
-        )
-    }
 }
 
 struct ChatView_Previews: PreviewProvider {

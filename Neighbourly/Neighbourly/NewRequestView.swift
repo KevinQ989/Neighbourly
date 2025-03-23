@@ -88,9 +88,8 @@ struct NewRequestView: View {
                         .padding(.top,10)
                     }
                 }
-                StatusBar()
             }
-            .navigationBarHidden(true)
+            .navigationTitle("New Request")
         }
     }
 }
