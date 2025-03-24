@@ -326,9 +326,6 @@ struct ProfileView: View {
 }
 
 // MARK: - Preview
-
-struct ProfileView_Previews: PreviewProvider {
-  static var previews: some View {
+#Preview {
     ProfileView()
-  }
 }

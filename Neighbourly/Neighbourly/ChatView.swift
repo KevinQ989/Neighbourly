@@ -131,8 +131,6 @@ enum ChatFilter {
     case all, requests, offers
 }
 
-struct ChatView_Previews: PreviewProvider {
-    static var previews: some View {
-        ChatView()
-    }
+#Preview {
+    ChatView()
 }

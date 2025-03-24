@@ -180,10 +180,6 @@ struct Request: Identifiable {
     let imageName: String
 }
 
-// Preview
-struct HomePageView_Previews: PreviewProvider {
-    static var previews: some View {
-        HomePageView()
-    }
+#Preview {
+    HomePageView()
 }
-

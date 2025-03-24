@@ -14,6 +14,7 @@ struct AppView: View {
   var body: some View {
     Group {
       if isAuthenticated {
+        // Add if profile is created than go TabBarView(), else create profile
         TabBarView()
       } else {
         AuthView()
