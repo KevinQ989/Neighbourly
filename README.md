@@ -11,16 +11,16 @@ Neighbourly is a community-driven application designed to connect locals who nee
 
 ## Screenshots
 ### Home Page
-![Home Page](./screenshots/home.png)
+![Home Page](./screenshots/HomePageView.png)
 
 ### Request Page
-![Request Page](./screenshots/request.png)
+![Request Page](./screenshots/Request.png)
 
 ### Chats Page
-![Chats Page](./screenshots/chats.png)
+![Chats Page](./screenshots/Chats.png)
 
 ### Profile Page
-![Profile Page](./screenshots/profile.png)
+![Profile Page](./screenshots/Profile.png)
 
 ## Problem Statement
 Many individuals, including busy parents, the elderly, the disabled, and the sick, struggle with everyday tasks due to their circumstances. The lack of accessible help leads to stress, reduced quality of life, and safety concerns.
