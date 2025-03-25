@@ -5,7 +5,7 @@ Neighbourly is a community-driven application designed to connect locals who nee
 ## Features
 - **User Registration**: Identity verification and profile setup with location and skills.
 - **Post Requests**: Users can post requests categorized by type, location, and urgency.
-- **Optimized Matching**: Matches requests based on proximity and skills.
+- **Optimized Matching**: Matches requests based on proximity and categories.
 - **Rating System**: Ensures credibility and filters out problematic users.
 - **Notifications**: Real-time updates when assistance is needed nearby.
 
