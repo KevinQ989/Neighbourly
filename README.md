@@ -36,11 +36,11 @@ Neighbourly provides a community-centric platform where users can post requests 
 ## Getting Started
 1. Clone this repository:
    ```sh
-   git clone https://github.com/yourusername/neighbourly.git
+   git clone https://github.com/KevinQ989/Neighbourly.git
    ```
 2. Navigate to the project directory:
    ```sh
-   cd neighbourly
+   cd Neighbourly
    ```
 3. Install dependencies:
    ```sh
