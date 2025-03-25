@@ -5,22 +5,22 @@ Neighbourly is a community-driven application designed to connect locals who nee
 ## Features
 - **User Registration**: Identity verification and profile setup with location and skills.
 - **Post Requests**: Users can post requests categorized by type, location, and urgency.
-- **Optimized Matching**: Matches requests based on proximity and categories.
+- **Optimized Matching**: Matches requests based on proximity and skills.
 - **Rating System**: Ensures credibility and filters out problematic users.
 - **Notifications**: Real-time updates when assistance is needed nearby.
 
 ## Screenshots
 ### Home Page
-![Home Page](./screenshots/HomePageView.png)
+<img src="screenshots/HomePageView.png" alt="Home Page" width="500">
 
 ### Request Page
-![Request Page](./screenshots/Request.png)
+<img src="screenshots/Request.png" alt="Request Page" width="500">
 
 ### Chats Page
-![Chats Page](./screenshots/Chats.png)
+<img src="screenshots/Chats.png" alt="Chats Page" width="500">
 
 ### Profile Page
-![Profile Page](./screenshots/Profile.png)
+<img src="screenshots/Profile.png" alt="Profile Page" width="500">
 
 ## Problem Statement
 Many individuals, including busy parents, the elderly, the disabled, and the sick, struggle with everyday tasks due to their circumstances. The lack of accessible help leads to stress, reduced quality of life, and safety concerns.
@@ -36,7 +36,7 @@ Neighbourly provides a community-centric platform where users can post requests 
 ## Getting Started
 1. Clone this repository:
    ```sh
-   git clone https://github.com/KevinQ989/Neighbourly.git
+   git clone https://github.com/yourusername/neighbourly.git
    ```
 2. Navigate to the project directory:
    ```sh
