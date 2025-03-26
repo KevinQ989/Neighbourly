@@ -13,5 +13,7 @@
 			</array>
 		</dict>
 	</array>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Neighbourly needs your location to show nearby requests and center the map.</string>
 </dict>
 </plist>
