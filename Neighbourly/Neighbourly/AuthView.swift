@@ -1,9 +1,4 @@
-//
-//  AuthView.swift
-//  Neighbourly
-//
-//  Created by Kevin Quah on 22/3/25.
-//
+// AuthView.swift
 
 import Foundation
 import SwiftUI
@@ -13,39 +8,41 @@ struct AuthView: View {
     @State var email = ""
     @State var isLoading = false
     @State var result: Result<Void, Error>?
-    
+
     let primaryColor = Color(red: 0.2, green: 0.5, blue: 0.8)
     let backgroundColor = Color(red: 0.96, green: 0.97, blue: 0.98)
-    
+
     var body: some View {
         ZStack {
             backgroundColor.edgesIgnoringSafeArea(.all)
-            
+
             VStack(spacing: 20) {
                 Spacer()
-                
+
                 VStack(spacing: 10) {
-                    Image(systemName: "house.fill") // Replace with your custom logo
+                    Image(systemName: "house.fill") // Replace with your custom logo if you have one
                         .font(.system(size: 48))
                         .foregroundColor(primaryColor)
-                    
+
                     Text("Neighbourly")
                         .font(.system(size: 32, weight: .bold))
                         .foregroundColor(.black)
                 }
                 .padding(.bottom, 60)
-                
+
                 VStack(spacing: 16) {
-                    Text("Create an account")
+                    // --- Updated Title/Prompt ---
+                    Text("Sign In or Sign Up") // Clearer title
                         .font(.title2)
                         .fontWeight(.semibold)
-                    
-                    Text("Enter your email to sign up for Neighbourly!")
+
+                    Text("Enter your email to receive a secure sign-in link.") // Updated prompt
                         .font(.body)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
                         .padding(.bottom, 10)
-                    
+                    // --- End Update ---
+
                     VStack(spacing: 20) {
                         TextField("Email", text: $email)
                             .padding()
@@ -55,18 +52,19 @@ struct AuthView: View {
                             .textContentType(.emailAddress)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
-                        
+                            .keyboardType(.emailAddress) // Ensure keyboard type is set
+
                         Button(action: signInButtonTapped) {
                             ZStack {
                                 RoundedRectangle(cornerRadius: 10)
                                     .fill(primaryColor)
                                     .shadow(color: primaryColor.opacity(0.3), radius: 5)
-                                
+
                                 if isLoading {
                                     ProgressView()
                                         .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                 } else {
-                                    Text("Sign in")
+                                    Text("Continue with Email") // Slightly more descriptive button
                                         .fontWeight(.semibold)
                                         .foregroundColor(.white)
                                         .padding()
@@ -74,10 +72,12 @@ struct AuthView: View {
                             }
                             .frame(height: 50)
                         }
-                        .disabled(isLoading)
+                        .disabled(isLoading || email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) // Disable if email is empty
+
                     }
                     .padding(.horizontal)
-                    
+
+                    // Result message display (keep as is)
                     if let result {
                         VStack {
                             switch result {
@@ -93,7 +93,8 @@ struct AuthView: View {
                             case .failure(let error):
                                 HStack {
                                     Image(systemName: "exclamationmark.circle.fill")
-                                    Text(error.localizedDescription)
+                                    // Show a more generic error for security maybe?
+                                    Text("Error: \(error.localizedDescription)")
                                 }
                                 .foregroundColor(.red)
                                 .padding()
@@ -110,63 +111,73 @@ struct AuthView: View {
                 .cornerRadius(16)
                 .shadow(color: Color.black.opacity(0.1), radius: 10)
                 .padding(.horizontal)
-                
+
                 Spacer()
 
+                // Terms and Policy (Keep as is)
                 VStack(spacing: 3) {
                     HStack(spacing: 0) {
                         Text("By clicking continue, you agree to our ")
                             .font(.footnote)
                             .foregroundColor(.secondary)
-                        
-                        Button("Terms of Service") {
-                            // Open terms
-                        }
-                        .font(.footnote)
-                        .foregroundColor(primaryColor)
+
+                        Button("Terms of Service") { /* Open terms */ }
+                            .font(.footnote)
+                            .foregroundColor(primaryColor)
                     }
-                    
+
                     HStack(spacing: 3) {
                         Text("and")
                             .font(.footnote)
                             .foregroundColor(.secondary)
-                        
-                        Button("Privacy Policy") {
-                            // Open privacy policy
-                        }
-                        .font(.footnote)
-                        .foregroundColor(primaryColor)
+
+                        Button("Privacy Policy") { /* Open privacy policy */ }
+                            .font(.footnote)
+                            .foregroundColor(primaryColor)
                     }
                 }
                 .padding(.bottom, 20)
-                
-                RoundedRectangle(cornerRadius: 2)
-                    .frame(width: 40, height: 4)
-                    .foregroundColor(.gray)
-                    .padding(.bottom, 10)
+
+                // Bottom decoration (Keep as is)
+                // RoundedRectangle(cornerRadius: 2)
+                //     .frame(width: 40, height: 4)
+                //     .foregroundColor(.gray)
+                //     .padding(.bottom, 10)
             }
             .padding()
         }
-        .onOpenURL(perform: { url in
+        .onOpenURL(perform: { url in // Keep as is
             Task {
                 do {
                     try await supabase.auth.session(from: url)
                 } catch {
-                    self.result = .failure(error)
+                    // Use Task @MainActor for UI updates if needed, though @State handles it
+                    Task { @MainActor in self.result = .failure(error) }
                 }
             }
         })
     }
-    
+
     func signInButtonTapped() {
-        Task {
+        Task { @MainActor in // Ensure state updates are on main thread
             isLoading = true
+            result = nil // Clear previous result
             defer { isLoading = false }
-            
+
+            // --- Trim email ---
+            let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+            // --- End Trim ---
+
+            guard !trimmedEmail.isEmpty else {
+                 // Optionally show an error if email is empty after trimming
+                 result = .failure(ValidationError(message: "Email cannot be empty."))
+                 return
+            }
+
             do {
                 try await supabase.auth.signInWithOTP(
-                    email: email,
-                    redirectTo: URL(string: "io.supabase.user-management://login-callback")
+                    email: trimmedEmail, // Use trimmed email
+                    redirectTo: URL(string: "io.supabase.user-management://login-callback") // Ensure this matches Supabase settings
                 )
                 result = .success(())
             } catch {
@@ -175,6 +186,13 @@ struct AuthView: View {
         }
     }
 }
+
+// Simple validation error struct
+struct ValidationError: LocalizedError {
+    let message: String
+    var errorDescription: String? { message }
+}
+
 
 #Preview {
     AuthView()

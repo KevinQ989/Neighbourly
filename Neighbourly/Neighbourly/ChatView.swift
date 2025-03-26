@@ -1,50 +1,79 @@
 // ChatView.swift
 
 import SwiftUI
-import Supabase // <-- Import
+import Supabase
 
 // ChatFilter enum remains the same
 enum ChatFilter {
-    case all //, requests, offers // Simplify for now, filtering logic needs rework with new model
+    case all
 }
 
-// Updated ChatRow to use the new Chat model
+// Updated ChatRow to use the new Chat model and display last message & avatar
 struct ChatRow: View {
-    let chat: Chat // Use the new Chat model
+    let chat: Chat
+
+    // Date formatter for relative time
+    private static var relativeDateFormatter: RelativeDateTimeFormatter = {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter
+    }()
+
+    // Function to format timestamp relatively
+    private func formatTimestamp(_ date: Date?) -> String {
+        guard let date = date else { return "" }
+        if Calendar.current.isDateInToday(date) || Calendar.current.isDateInYesterday(date) {
+             return ChatRow.relativeDateFormatter.localizedString(for: date, relativeTo: Date())
+        } else {
+             return date.formatted(.dateTime.month(.abbreviated).day())
+        }
+    }
 
     var body: some View {
         HStack {
-            // Display other participant's avatar (placeholder)
-            // TODO: Load avatar from chat.otherParticipant.avatarUrl
-            Image(systemName: "person.circle.fill")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 50, height: 50)
-                .foregroundColor(.gray)
-                .clipShape(Circle())
+            // --- Use AsyncImage for Avatar ---
+            AsyncImage(url: URL(string: chat.otherParticipant.avatarUrl ?? "")) { phase in
+                switch phase {
+                case .empty:
+                    Image(systemName: "person.circle.fill")
+                        .resizable().foregroundColor(.gray)
+                        .overlay(ProgressView().scaleEffect(0.5))
+                case .success(let image):
+                    image.resizable()
+                case .failure:
+                    Image(systemName: "person.circle.fill")
+                        .resizable().foregroundColor(.gray)
+                @unknown default:
+                    EmptyView()
+                }
+            }
+            .scaledToFit() // Use fit for avatar
+            .frame(width: 50, height: 50)
+            .clipShape(Circle())
+            .overlay(Circle().stroke(Color.gray.opacity(0.2), lineWidth: 1))
+            // --- End AsyncImage ---
 
             VStack(alignment: .leading) {
                 HStack {
-                    // Display other participant's name
+                    // Other participant's name
                     Text(chat.otherParticipant.fullName ?? chat.otherParticipant.username ?? "Unknown User")
                         .font(.headline)
                     Spacer()
-                    // Display chat creation time (or last message time later)
-                    Text(chat.createdAt, style: .time) // Example: Show time
+                    // Display last message timestamp (relative)
+                    Text(formatTimestamp(chat.lastMessageTimestamp))
                         .font(.subheadline)
                         .foregroundColor(.gray)
                 }
-                // Display last message preview (placeholder)
-                Text("Last message preview...") // TODO: Fetch/display last message
+                // Display last message content
+                Text(chat.lastMessageContent ?? "No messages yet")
                     .font(.subheadline)
                     .foregroundColor(.gray)
                     .lineLimit(1)
             }
             Spacer()
 
-            // Optional: Display related request image (placeholder)
-            // Requires fetching request details based on chat.requestId
-            Image(systemName: "archivebox.fill") // Placeholder
+            // Placeholder Request Image
+            Image(systemName: "archivebox.fill")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 40, height: 40)
@@ -57,187 +86,162 @@ struct ChatRow: View {
 
 
 struct ChatView: View { // Brace 1 Open
-    // State for filters, fetched chats, loading, errors
-    @State private var selectedTab: ChatFilter = .all // Keep filter state if needed later
+    // State
+    @State private var selectedTab: ChatFilter = .all
     @State private var chats: [Chat] = []
     @State private var isLoading = false
     @State private var errorMessage: String?
 
-    // State for navigation
-    @State private var selectedChat: Chat? = nil // Store the whole Chat object for navigation
-    // Note: NavigationLink using isActive binding is less reliable in newer SwiftUI versions.
-    // Consider using .navigationDestination(for: Chat.self) in iOS 16+
-
-    // Filtered chats (simplified for now)
+    // Filtered chats (simplified)
     var filteredChats: [Chat] {
-        // TODO: Re-implement filtering based on request association if needed
         return chats
     }
 
+    // Standard JSON Decoder
+    private var jsonDecoder: JSONDecoder = {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .custom { decoder -> Date in
+            let container = try decoder.singleValueContainer()
+            let dateString = try container.decode(String.self)
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let date = formatter.date(from: dateString) { return date }
+            formatter.formatOptions = [.withInternetDateTime] // Fallback
+            if let date = formatter.date(from: dateString) { return date }
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Cannot decode date string \(dateString)")
+        }
+        return decoder
+    }()
+
     var body: some View { // Brace 2 Open
-        // Use the NavigationView provided by TabBarView
-        // NavigationView { // <-- REMOVE
-            VStack(spacing: 0) { // Use spacing 0 for seamless list
+        VStack(spacing: 0) { // Use spacing 0
 
-                // Filter Buttons (Keep UI, functionality needs rework later)
-                /* // Commenting out filter buttons for now as logic needs update
-                HStack {
-                    FilterButton(title: "All", isSelected: selectedTab == .all) { selectedTab = .all }
-                    // FilterButton(title: "Your Requests", ...)
-                    // FilterButton(title: "Your Offers", ...)
-                }
-                .padding(.horizontal)
-                .padding(.vertical, 10)
-                .background(Color(.systemGroupedBackground)) // Add background
-                 */
-
-                // Handle Loading/Error/Empty States
-                if isLoading { // Brace 3 Open
-                    ProgressView("Loading Chats...")
-                        .frame(maxHeight: .infinity)
-                } else if let errorMessage { // Brace 3 Close, Brace 4 Open
-                    VStack { // Brace 5 Open
-                        Text("Error loading chats:")
-                        Text(errorMessage).foregroundColor(.red).font(.caption)
-                        Button("Retry") { Task { await fetchChats() } }
-                            .padding(.top)
-                    } // Brace 5 Close
-                    .frame(maxHeight: .infinity)
-                } else if chats.isEmpty { // Brace 4 Close, Brace 6 Open
-                    Text("No chats yet.")
-                        .foregroundColor(.gray)
-                        .frame(maxHeight: .infinity)
-                } else { // Brace 6 Close, Brace 7 Open
-                    // List of Chats
-                    List { // Use List directly
-                        ForEach(chats) { chat in // Use ForEach within List
-                            // Use NavigationLink directly as the row content
-                            // This is simpler for basic navigation
-                            NavigationLink(destination: ChatDetailView(chat: chat)) {
-                                ChatRow(chat: chat)
-                            }
-                        }
-                    } // End List
-                    .listStyle(PlainListStyle()) // Use PlainListStyle
-                } // Brace 7 Close
-            } // End VStack
-            .navigationTitle("Chats")
-            // .navigationBarTitleDisplayMode(.inline) // Optional: Use inline title
-            .task { // Fetch chats when the view appears
-                await fetchChats()
+            // Filter Buttons (Commented out)
+            /*
+            HStack {
+                FilterButton(title: "All", isSelected: selectedTab == .all) { selectedTab = .all }
+                // FilterButton(title: "Your Requests", ...)
+                // FilterButton(title: "Your Offers", ...)
             }
-        // } // <-- REMOVE (End of removed NavigationView)
+            .padding(.horizontal)
+            .padding(.vertical, 10)
+            .background(Color(.systemGroupedBackground))
+            */
+
+            // Handle Loading/Error/Empty States
+            if isLoading { // Brace 3 Open
+                ProgressView("Loading Chats...")
+                    .frame(maxHeight: .infinity)
+            } else if let errorMessage { // Brace 3 Close, Brace 4 Open
+                VStack { // Brace 5 Open
+                    Text("Error loading chats:")
+                    Text(errorMessage).foregroundColor(.red).font(.caption)
+                    Button("Retry") { Task { await fetchChats() } }
+                        .padding(.top)
+                } // Brace 5 Close
+                .frame(maxHeight: .infinity)
+            } else if chats.isEmpty { // Brace 4 Close, Brace 6 Open
+                Text("No chats yet.")
+                    .foregroundColor(.gray)
+                    .frame(maxHeight: .infinity)
+            } else { // Brace 6 Close, Brace 7 Open
+                // List of Chats
+                List { // Use List directly
+                    ForEach(chats) { chat in // Use ForEach within List
+                        NavigationLink(destination: ChatDetailView(chat: chat)) {
+                            ChatRow(chat: chat) // Uses updated ChatRow
+                        }
+                    }
+                } // End List
+                .listStyle(PlainListStyle())
+                .refreshable {
+                    await fetchChats()
+                }
+            } // Brace 7 Close
+        } // End VStack
+        .navigationTitle("Chats")
+        .task { // Fetch chats when the view appears
+            await fetchChats()
+        }
     } // Brace 2 Close
 
-    // Function to fetch chats from Supabase
+    // --- Updated fetchChats Function ---
     @MainActor
     func fetchChats() async { // Brace 11 Open
         isLoading = true
         errorMessage = nil
-        // chats = [] // Optionally clear chats while loading
 
         do { // Brace 12 Open
             // 1. Get current user ID
             let currentUserId = try await supabase.auth.session.user.id
 
-            // --- Simpler Approach: Fetch Chats, then Profiles ---
-
-            // Fetch basic chat info where user is involved
-            // Define struct locally if only used here
+            // Query 1: Fetch basic chat info
             struct BasicChatInfo: Decodable, Identifiable {
-                let id: Int
-                let requestId: Int?
-                let requesterId: UUID
-                let helperId: UUID
-                let createdAt: Date
+                let id: Int; let requestId: Int?; let requesterId: UUID; let helperId: UUID; let createdAt: Date
+                 enum CodingKeys: String, CodingKey { case id; case requestId = "request_id"; case requesterId = "requester_id"; case helperId = "helper_id"; case createdAt = "created_at" }
+            }
+            let basicChats: [BasicChatInfo] = try await supabase.from("chats").select("id, request_id, requester_id, helper_id, created_at").or("requester_id.eq.\(currentUserId),helper_id.eq.\(currentUserId)").order("created_at", ascending: false).execute().value
 
-                enum CodingKeys: String, CodingKey {
-                    case id
-                    case requestId = "request_id"
-                    case requesterId = "requester_id"
-                    case helperId = "helper_id"
-                    case createdAt = "created_at"
-                }
+            guard !basicChats.isEmpty else {
+                self.chats = []; isLoading = false; print("No chats found for user."); return
             }
 
-            let basicChats: [BasicChatInfo] = try await supabase
-                .from("chats")
-                .select("id, request_id, requester_id, helper_id, created_at")
-                .or("requester_id.eq.\(currentUserId),helper_id.eq.\(currentUserId)")
-                .order("created_at", ascending: false) // Or order by updated_at later
-                .execute()
-                .value
+            // 3. Prepare for fetching profiles and latest messages
+            var otherUserIds = Set<UUID>()
+            let chatIds = basicChats.map { $0.id }
+            for basicChat in basicChats { otherUserIds.insert((basicChat.requesterId == currentUserId) ? basicChat.helperId : basicChat.requesterId) }
 
-            // Now, for each chat, determine the other user's ID and fetch their profile
+            // Query 2: Fetch profiles
+            let profiles: [Profile] = try await supabase.from("profiles").select("id, username, full_name, avatar_url").in("id", value: Array(otherUserIds)).execute().value
+            let profilesById = Dictionary(uniqueKeysWithValues: profiles.map { ($0.id, $0) })
+
+            // Query 3: Fetch latest messages
+            struct LatestMessage: Decodable { let chatId: Int; let content: String; let createdAt: Date; enum CodingKeys: String, CodingKey { case chatId = "chat_id"; case content; case createdAt = "created_at" } }
+            let allMessagesForChats: [LatestMessage] = try await supabase.from("messages").select("chat_id, content, created_at").in("chat_id", value: chatIds).order("created_at", ascending: false).execute().value
+
+            // Process latest messages client-side
+            var latestMessageByChatId: [Int: LatestMessage] = [:]
+            for message in allMessagesForChats { if latestMessageByChatId[message.chatId] == nil { latestMessageByChatId[message.chatId] = message } }
+
+            // 4. Combine results
             var populatedChats: [Chat] = []
             for basicChat in basicChats { // Brace 13 Open
                 let otherUserId = (basicChat.requesterId == currentUserId) ? basicChat.helperId : basicChat.requesterId
-
-                // Fetch the other user's profile
-                do { // Brace 14 Open (Profile fetch do-catch)
-                    let otherProfile: Profile = try await supabase
-                        .from("profiles")
-                        .select("id, username, full_name, avatar_url") // Select fields matching Profile struct
-                        .eq("id", value: otherUserId)
-                        .single() // Expect exactly one profile
-                        .execute()
-                        .value
-
-                    // Create the final Chat object
-                    let chat = Chat(
-                        id: basicChat.id,
-                        requestId: basicChat.requestId,
-                        otherParticipant: otherProfile,
-                        createdAt: basicChat.createdAt
-                    )
-                    populatedChats.append(chat)
-                } catch { // Brace 14 Close, Brace 15 Open
-                    print("❌ Could not fetch profile for user \(otherUserId) in chat \(basicChat.id): \(error)")
-                    // Optionally skip this chat or create a Chat object with placeholder profile
-                    // Example: Create with a placeholder profile
+                guard let otherProfile = profilesById[otherUserId] else {
+                    print("⚠️ Profile not found for user \(otherUserId) in chat \(basicChat.id). Creating placeholder.")
                     let placeholderProfile = Profile(id: otherUserId, username: "Unknown", fullName: "Unknown User", website: nil, avatarUrl: nil)
-                    let chat = Chat(
-                        id: basicChat.id,
-                        requestId: basicChat.requestId,
-                        otherParticipant: placeholderProfile,
-                        createdAt: basicChat.createdAt
-                    )
-                    populatedChats.append(chat) // Add chat even if profile fetch failed
-                } // Brace 15 Close
+                    let latestMsg = latestMessageByChatId[basicChat.id]
+                    let chat = Chat(id: basicChat.id, requestId: basicChat.requestId, otherParticipant: placeholderProfile, createdAt: basicChat.createdAt, lastMessageContent: latestMsg?.content, lastMessageTimestamp: latestMsg?.createdAt)
+                    populatedChats.append(chat)
+                    continue
+                }
+                let latestMsg = latestMessageByChatId[basicChat.id]
+                let chat = Chat(id: basicChat.id, requestId: basicChat.requestId, otherParticipant: otherProfile, createdAt: basicChat.createdAt, lastMessageContent: latestMsg?.content, lastMessageTimestamp: latestMsg?.createdAt)
+                populatedChats.append(chat)
             } // Brace 13 Close
 
-            self.chats = populatedChats
-            print("Fetched \(populatedChats.count) chats.")
+            // Sort final list
+            self.chats = populatedChats.sorted { ($0.lastMessageTimestamp ?? $0.createdAt) > ($1.lastMessageTimestamp ?? $1.createdAt) }
+            print("Processed \(self.chats.count) chats with latest messages.")
 
         } catch { // Brace 12 Close, Brace 16 Open
             print("❌ Error fetching chats: \(error)")
             self.errorMessage = error.localizedDescription
         } // Brace 16 Close
-
         isLoading = false
     } // Brace 11 Close
 
 } // Brace 1 Close
 
 
-// FilterButton struct (Keep if using filters later)
+// FilterButton struct (Keep as is)
 struct FilterButton: View { // Brace 17 Open
     let title: String
     let isSelected: Bool
     let action: () -> Void
-
     var body: some View { // Brace 18 Open
         Button(action: action) { // Brace 19 Open
-            Text(title)
-                .padding(.vertical, 8)
-                .padding(.horizontal, 12)
-                .background(isSelected ? Color.black : Color.white)
-                .foregroundColor(isSelected ? .white : .black)
-                .cornerRadius(20)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20)
-                        .stroke(Color.gray.opacity(0.5), lineWidth: 1)
-                )
+            Text(title).padding(.vertical, 8).padding(.horizontal, 12).background(isSelected ? Color.black : Color.white).foregroundColor(isSelected ? .white : .black).cornerRadius(20).overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.gray.opacity(0.5), lineWidth: 1))
         } // Brace 19 Close
     } // Brace 18 Close
 } // Brace 17 Close
@@ -245,18 +249,7 @@ struct FilterButton: View { // Brace 17 Open
 
 // Preview Provider
 #Preview { // Brace 20 Open
-    // Create sample data matching the *new* Chat model for preview
-    let sampleOtherProfile = Profile(id: UUID(), username: "sampleUser", fullName: "Sample User", website: nil, avatarUrl: nil)
-    let sampleChat = Chat(id: 1, requestId: 1, otherParticipant: sampleOtherProfile, createdAt: Date())
-    let sampleChat2 = Chat(id: 2, requestId: 2, otherParticipant: sampleOtherProfile, createdAt: Date().addingTimeInterval(-3600))
-
-    // Embed in NavigationView for preview context
     NavigationView { // Brace 21 Open
-        // Provide sample data directly to the view for preview
-        // Need to initialize ChatView correctly if it expects bindings or state objects
-        // For simple preview with fetched data, we can inject sample data if needed
-        // Or just let it run its fetch logic (might fail in preview)
-         ChatView() // Let preview run fetch logic or show loading/empty state
-        // ChatView(chats: [sampleChat, sampleChat2]) // Alternative: Inject sample data
+         ChatView()
     } // Brace 21 Close
 } // Brace 20 Close

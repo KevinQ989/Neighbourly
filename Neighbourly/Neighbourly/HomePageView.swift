@@ -1,9 +1,9 @@
 // HomePageView.swift
 
 import SwiftUI
-import MapKit // Import MapKit
+import MapKit
 import Supabase
-import CoreLocation // <-- Import CoreLocation
+import CoreLocation
 
 // MARK: - Equatable Coordinate Wrapper
 struct EquatableCoordinate: Equatable {
@@ -47,57 +47,65 @@ struct RequestCard: View {
     var body: some View {
         VStack(alignment: .leading) {
             // --- Use AsyncImage ---
-            AsyncImage(url: URL(string: request.imageUrl ?? "")) { phase in
+            AsyncImage(url: URL(string: request.imageUrl ?? "")) { phase in // Create URL from optional string
                 switch phase {
                 case .empty:
                     // Placeholder while loading or if URL is invalid/nil
-                    Rectangle()
-                        .fill(Color.gray.opacity(0.1))
-                        .frame(width: 140, height: 140)
-                        .overlay(ProgressView()) // Show loading indicator
+                    ZStack { // Use ZStack to center ProgressView
+                        Rectangle()
+                            .fill(Color.gray.opacity(0.1))
+                        ProgressView()
+                    }
                 case .success(let image):
                     image
-                        .resizable()
+                        .resizable() // Make image resizable
                         .aspectRatio(contentMode: .fill) // Fill the frame
-                        .frame(width: 140, height: 140) // Fixed frame
                 case .failure:
-                    // Placeholder on failure
-                    Rectangle()
-                        .fill(Color.gray.opacity(0.1))
-                        .frame(width: 140, height: 140)
-                        .overlay(Image(systemName: "photo").font(.largeTitle).foregroundColor(.gray))
+                    // Placeholder on failure (e.g., bad URL, network error)
+                    ZStack { // Use ZStack to center icon
+                        Rectangle()
+                            .fill(Color.gray.opacity(0.1))
+                        Image(systemName: "photo.fill") // System icon for placeholder
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 50, height: 50)
+                            .foregroundColor(.gray)
+                    }
                 @unknown default:
+                    // Fallback for future cases
                     EmptyView()
                 }
             }
             // --- End AsyncImage ---
             .frame(width: 140, height: 140) // Apply frame to AsyncImage container
+            .clipped() // Clip the image content to the frame
 
             // Basic details from RequestData
-            Text(request.title) // Use title from RequestData
+            Text(request.title)
                 .font(.subheadline)
                 .fontWeight(.medium)
                 .lineLimit(1)
+                .padding(.top, 4) // Add slight padding
 
-            Text(request.description ?? "No description") // Use description
+            Text(request.description ?? "No description")
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .lineLimit(1)
+                .padding(.bottom, 4) // Add slight padding
 
-            // We need user info - fetch later or show User ID for now
-            // Text("User ID: \(request.userId.uuidString.prefix(8))...")
-            //    .font(.caption2)
-            //    .foregroundColor(.gray)
         }
-        .frame(width: 140)
-        .cornerRadius(10) // Apply corner radius to the VStack
+        .frame(width: 140) // Keep overall card width
+        // Apply background and corner radius to the VStack for consistent look
+        .background(Color(UIColor.systemGray6)) // Background for the text area too
+        .cornerRadius(10)
         .overlay(
             RoundedRectangle(cornerRadius: 10)
                 .stroke(Color.gray.opacity(0.2), lineWidth: 1)
         )
-        .clipped() // Clip contents like image to the corner radius
+        // No need for .clipped() here as content is within bounds or image is clipped
     }
 }
+// --- End Request Card View Update ---
 
 // MARK: - RPC Parameter Struct
 struct NearbyRequestsParams: Encodable {
@@ -109,7 +117,7 @@ struct NearbyRequestsParams: Encodable {
 // MARK: - Home Page View
 struct HomePageView: View {
     // State Variables
-    @State private var searchText = ""
+    @State private var searchText = "" // State for the search text
     @State private var isMapFullScreen = false
     @State private var region = MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 1.3521, longitude: 103.8198), // Default: Singapore
@@ -117,11 +125,11 @@ struct HomePageView: View {
     )
     @State private var hasCenteredMapOnUser = false
     @StateObject private var locationManager = LocationManager.shared // Use singleton or LocationManager()
-    @State private var nearbyRequests: [RequestData] = []
+    @State private var nearbyRequests: [RequestData] = [] // All fetched requests
     @State private var isLoadingRequests = false
     @State private var requestError: String?
 
-    // Sample Categories (keep for now, fetch later if needed)
+    // Sample Categories
     let categories = [
         Category(name: "Moving Help", imageName: "moving_help"),
         Category(name: "Tech", imageName: "tech"),
@@ -130,35 +138,58 @@ struct HomePageView: View {
         Category(name: "Home Repair", imageName: "home_repair")
     ]
 
-    // Computed property for the equatable coordinate ID
+    // Computed properties
     private var equatableUserLocation: EquatableCoordinate {
         EquatableCoordinate(coordinate: locationManager.userLocation)
     }
-
-    // Define search radius in meters (e.g., 5km)
     private let searchRadiusMeters: Double = 5000.0
-
-    // Computed property to filter requests for map annotations
     private var requestsWithCoordinates: [RequestData] {
         nearbyRequests.filter { $0.coordinate != nil }
     }
 
+    // --- Computed Property for Filtered Requests ---
+    private var filteredRequests: [RequestData] {
+        if searchText.isEmpty {
+            return nearbyRequests // Return all if search is empty
+        } else {
+            // Filter based on title or description containing searchText (case-insensitive)
+            let lowercasedSearch = searchText.lowercased()
+            return nearbyRequests.filter { request in
+                let titleMatch = request.title.lowercased().contains(lowercasedSearch)
+                let descriptionMatch = request.description?.lowercased().contains(lowercasedSearch) ?? false
+                return titleMatch || descriptionMatch
+            }
+        }
+    }
+    // --- End Filtered Requests ---
+
     var body: some View {
         ZStack { // Brace 1 Open
             VStack(spacing: 0) { // Brace 2 Open
-                // Search bar (Original commented out code included)
+                // --- Uncommented and Enabled Search Bar ---
                  HStack {
                      Image(systemName: "magnifyingglass")
                          .foregroundColor(.gray)
-
-                     TextField("Search", text: $searchText)
+                     TextField("Search Requests (Title, Description)", text: $searchText) // Updated placeholder
                          .font(.system(size: 17))
+                         .autocorrectionDisabled() // Disable autocorrect for search
+                         .textInputAutocapitalization(.never) // Don't capitalize search input
+                     // Add clear button if search text is not empty
+                     if !searchText.isEmpty {
+                         Button {
+                             searchText = "" // Clear the search text
+                         } label: {
+                             Image(systemName: "xmark.circle.fill")
+                                 .foregroundColor(.gray)
+                         }
+                     }
                  }
                  .padding(10)
                  .background(Color(UIColor.systemGray6))
                  .cornerRadius(10)
                  .padding(.horizontal)
-
+                 .padding(.bottom, 5) // Add some padding below search bar
+                 // --- End Search Bar ---
 
                 ScrollView { // Brace 3 Open
                     VStack(alignment: .leading, spacing: 20) { // Brace 4 Open
@@ -189,7 +220,7 @@ struct HomePageView: View {
                             } // Brace 7 Close
                         } // Brace 5 Close
 
-                        // Nearby Requests section
+                        // --- Nearby Requests section (Uses filteredRequests) ---
                         VStack(alignment: .leading) { // Brace 11 Open
                             HStack { // Brace 12 Open
                                 Text("Nearby Requests")
@@ -201,7 +232,7 @@ struct HomePageView: View {
                             } // Brace 12 Close
                             .padding(.horizontal)
 
-                            // Handle loading and error states
+                            // Handle loading/error/empty/list states
                             if isLoadingRequests { // Brace 13 Open
                                 ProgressView()
                                     .padding()
@@ -210,28 +241,28 @@ struct HomePageView: View {
                                 Text("Error loading requests: \(requestError)")
                                     .foregroundColor(.red)
                                     .padding()
-                            } else if nearbyRequests.isEmpty { // Brace 14 Close, Brace 15 Open
-                                Text("No nearby requests found.")
+                            } else if filteredRequests.isEmpty { // Brace 15 Open
+                                Text(searchText.isEmpty ? "No nearby requests found." : "No requests match your search.") // Dynamic empty message
                                     .foregroundColor(.gray)
                                     .padding()
                             } else { // Brace 15 Close, Brace 16 Open
                                 ScrollView(.horizontal, showsIndicators: false) { // Brace 17 Open
                                     HStack(spacing: 15) { // Brace 18 Open
-                                        // Use fetched nearbyRequests (RequestData)
-                                        ForEach(nearbyRequests) { request in // Brace 19 Open
-                                            // Wrap RequestCard in NavigationLink
+                                        // Iterate over filteredRequests
+                                        ForEach(filteredRequests) { request in // Brace 19 Open
                                             NavigationLink(destination: RequestDetailView(request: request)) { // Brace 20 Open
                                                 RequestCard(request: request)
                                             } // Brace 20 Close
-                                            .buttonStyle(PlainButtonStyle()) // Prevent card from looking like a default button
+                                            .buttonStyle(PlainButtonStyle())
                                         } // Brace 19 Close
                                     } // Brace 18 Close
                                     .padding(.horizontal)
                                 } // Brace 17 Close
                             } // Brace 16 Close
                         } // Brace 11 Close
+                        // --- End Nearby Requests Section ---
 
-                        // Map section - Updated
+                        // Map section
                         VStack(alignment: .leading) { // Brace 21 Open
                             HStack { // Add HStack for title and location button
                                 Text("Map")
@@ -279,7 +310,7 @@ struct HomePageView: View {
             .blur(radius: isMapFullScreen ? 10 : 0)
             .disabled(isMapFullScreen)
 
-            // Full Screen Map Overlay (Original code included)
+            // Full Screen Map Overlay
             if isMapFullScreen { // Brace 24 Open
                 FullScreenMapView(region: $region, isFullScreen: $isMapFullScreen)
                     .transition(.move(edge: .bottom))

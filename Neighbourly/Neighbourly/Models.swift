@@ -6,7 +6,7 @@ import CoreLocation // Keep if used by GeoJSONPoint
 // MARK: - Profile Models (Existing)
 
 // Profile struct for DECODING data FROM Supabase
-struct Profile: Decodable, Identifiable, Equatable { // Add Equatable
+struct Profile: Decodable, Identifiable, Equatable, Hashable { // Add Equatable & Hashable
     let id: UUID
     let username: String?
     let fullName: String?
@@ -24,6 +24,10 @@ struct Profile: Decodable, Identifiable, Equatable { // Add Equatable
     // Implement Equatable based on ID
     static func == (lhs: Profile, rhs: Profile) -> Bool {
         lhs.id == rhs.id
+    }
+    // Implement Hashable based on ID
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
     }
 }
 
@@ -97,7 +101,7 @@ struct RequestParams: Encodable {
 }
 
 // Struct for DECODING request data FROM Supabase
-struct RequestData: Decodable, Identifiable, Equatable { // Add Equatable for Map annotations
+struct RequestData: Decodable, Identifiable, Equatable, Hashable { // Add Equatable & Hashable
     let id: Int // Assuming bigint maps to Int
     let userId: UUID
     let title: String
@@ -110,9 +114,6 @@ struct RequestData: Decodable, Identifiable, Equatable { // Add Equatable for Ma
     let status: String
     let createdAt: Date
     // let updatedAt: Date // Add if needed
-
-    // We might want user details too, requires joining tables later
-    // let user: Profile?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -133,6 +134,10 @@ struct RequestData: Decodable, Identifiable, Equatable { // Add Equatable for Ma
     static func == (lhs: RequestData, rhs: RequestData) -> Bool {
         lhs.id == rhs.id
     }
+    // Implement Hashable based on ID
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
 
     // Helper to get coordinate for map annotations
     var coordinate: CLLocationCoordinate2D? {
@@ -141,7 +146,7 @@ struct RequestData: Decodable, Identifiable, Equatable { // Add Equatable for Ma
 }
 
 
-// MARK: - Chat & Message Models (New)
+// MARK: - Chat & Message Models (Updated)
 
 // Represents an individual message within a chat
 struct ChatMessage: Decodable, Identifiable, Hashable {
@@ -161,34 +166,35 @@ struct ChatMessage: Decodable, Identifiable, Hashable {
 }
 
 // Represents a chat thread, designed for the ChatView list
-// Includes information about the *other* participant in the chat
-struct Chat: Decodable, Identifiable, Equatable {
+struct Chat: Identifiable, Equatable, Hashable { // Removed Decodable for now as we construct manually
     let id: Int // Chat ID
     let requestId: Int? // Optional associated request ID
     let otherParticipant: Profile // Profile of the *other* user in the chat
-    // Optional: Add last message preview if needed later
-    // let lastMessage: String?
-    // let lastMessageTimestamp: Date?
+    var lastMessageContent: String? // Mutable for combining results
+    var lastMessageTimestamp: Date? // Mutable for combining results
     let createdAt: Date // When the chat was created
-    // let updatedAt: Date // When the last activity occurred (requires trigger or manual update)
-
-    enum CodingKeys: String, CodingKey {
-        case id
-        case requestId = "request_id"
-        case otherParticipant = "other_participant_profile" // Alias for joined profile data
-        // case lastMessage = "last_message" // Add if fetching last message later
-        // case lastMessageTimestamp = "last_message_timestamp" // Add if fetching last message later
-        case createdAt = "created_at"
-        // case updatedAt = "updated_at"
-    }
 
     // Implement Equatable based on ID
     static func == (lhs: Chat, rhs: Chat) -> Bool {
         lhs.id == rhs.id
     }
+    // Implement Hashable based on ID
+    func hash(into hasher: inout Hasher) {
+         hasher.combine(id)
+     }
+
+    // Initializer for combining results
+    init(id: Int, requestId: Int?, otherParticipant: Profile, createdAt: Date, lastMessageContent: String? = nil, lastMessageTimestamp: Date? = nil) {
+        self.id = id
+        self.requestId = requestId
+        self.otherParticipant = otherParticipant
+        self.createdAt = createdAt
+        self.lastMessageContent = lastMessageContent
+        self.lastMessageTimestamp = lastMessageTimestamp
+    }
 }
 
-// Struct for creating a new chat (used when starting chat from RequestDetailView)
+// Struct for creating a new chat
 struct NewChatParams: Encodable {
     let requestId: Int?
     let requesterId: UUID

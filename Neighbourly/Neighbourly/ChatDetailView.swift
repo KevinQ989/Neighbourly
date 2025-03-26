@@ -2,8 +2,7 @@
 
 import SwiftUI
 import Supabase
-import Realtime // <-- Explicitly import Realtime
-import Combine
+import Combine // Import Combine
 
 struct ChatDetailView: View { // Brace 1 Open
     // Input: The chat thread information
@@ -19,6 +18,8 @@ struct ChatDetailView: View { // Brace 1 Open
 
     // State for Realtime subscription
     @State private var channel: RealtimeChannel? = nil
+    // Task handle for the subscription listener
+    @State private var listenerTask: Task<Void, Never>? = nil
 
     // ScrollView reader to scroll to bottom
     @State private var scrollViewProxy: ScrollViewProxy? = nil
@@ -39,6 +40,21 @@ struct ChatDetailView: View { // Brace 1 Open
         return decoder
     }
 
+    // Date Formatter for message timestamps
+    private var messageTimestampFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none // No date part
+        formatter.timeStyle = .short // e.g., 10:30 AM
+        return formatter
+    }()
+
+    // ****** FIX: Add explicit internal initializer ******
+    // This ensures the preview has access, even with private computed properties.
+    internal init(chat: Chat) {
+        self.chat = chat
+    }
+    // ****** END FIX ******
+
     var body: some View { // Brace 2 Open
         VStack(spacing: 0) { // Use 0 spacing
             // --- Message List ---
@@ -54,7 +70,8 @@ struct ChatDetailView: View { // Brace 1 Open
             await setupChat()
             // Explicit cleanup using the return closure from .task
             return {
-                Task { await unsubscribeFromMessages() }
+                listenerTask?.cancel() // Cancel listener task
+                Task { await unsubscribeFromMessages() } // Unsubscribe channel
             }()
         }
         .onAppear { // Fetch user ID immediately on appear
@@ -68,24 +85,39 @@ struct ChatDetailView: View { // Brace 1 Open
         // Use a Group to help compiler with conditional content
         Group {
             if isLoadingMessages && messages.isEmpty {
-                ProgressView("Loading Messages...")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity) // Center loading
+                // Centered Loading Indicator
+                VStack { Spacer(); ProgressView("Loading Messages..."); Spacer() }
+                    .frame(height: 200) // Give it some height
             } else if let errorMessage {
+                // Centered Error Message
+                VStack {
+                    Spacer()
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.orange).font(.largeTitle).padding(.bottom, 5)
+                    Text("Error Loading Messages").font(.headline)
+                    Text(errorMessage).font(.caption).foregroundColor(.secondary).multilineTextAlignment(.center)
+                    Button("Retry") { Task { await fetchMessages() } }.padding(.top)
+                    Spacer()
+                }
+                .padding()
+                .frame(height: 200)
+            } else if messages.isEmpty {
+                 // Centered Empty State Message
                  VStack {
-                     Text("Error:")
-                     Text(errorMessage).foregroundColor(.red).font(.caption)
-                     Button("Retry Fetch") { Task { await fetchMessages() } }
-                         .padding(.top)
+                     Spacer()
+                     Text("No messages yet. Start the conversation!")
+                         .foregroundColor(.secondary)
+                     Spacer()
                  }
-                 .padding()
-                 .frame(maxWidth: .infinity, maxHeight: .infinity) // Center error
+                 .frame(height: 200) // Give it some height
             } else {
-                // Only show ScrollViewReader if there are messages or no error/loading
+                // Message Bubbles
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(spacing: 12) {
                             ForEach(messages) { message in
-                                MessageView(message: message, isCurrentUser: message.senderId == currentUserId)
+                                // Pass timestamp formatter
+                                MessageView(message: message, isCurrentUser: message.senderId == currentUserId, formatter: messageTimestampFormatter)
                                     .id(message.id)
                             }
                         }
@@ -94,13 +126,9 @@ struct ChatDetailView: View { // Brace 1 Open
                     }
                     .onAppear {
                         scrollViewProxy = proxy
-                        if !messages.isEmpty {
-                            scrollToBottom(proxy: proxy, animated: false)
-                        }
+                        if !messages.isEmpty { scrollToBottom(proxy: proxy, animated: false) }
                     }
-                    .onChange(of: messages) { _ in
-                        scrollToBottom(proxy: proxy)
-                    }
+                    .onChange(of: messages) { _ in scrollToBottom(proxy: proxy) }
                 } // End ScrollViewReader
             }
         } // End Group
@@ -108,43 +136,46 @@ struct ChatDetailView: View { // Brace 1 Open
 
     // Extracted Message Input Area View
     private var messageInputArea: some View {
-        HStack(alignment: .bottom) {
+        HStack(alignment: .bottom) { // Align items to bottom
             TextEditor(text: $newMessageText)
-                .frame(minHeight: 30, maxHeight: 100)
-                .padding(4)
+                .frame(minHeight: 30, maxHeight: 100) // Set min/max height
+                .padding(4) // Inner padding
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
                         .stroke(Color(UIColor.systemGray4))
                 )
 
             Button {
-                sendMessage()
+                sendMessage() // Call send function
             } label: {
                 Image(systemName: "arrow.up.circle.fill")
                     .resizable()
-                    .frame(width: 30, height: 30)
-                    .foregroundColor(newMessageText.trimmingCharacters(in: .whitespaces).isEmpty ? .gray : .blue)
+                    .frame(width: 30, height: 30) // Fixed size for button
+                    .foregroundColor(newMessageText.trimmingCharacters(in: .whitespaces).isEmpty ? .gray : .blue) // Change color when disabled
             }
-            .disabled(newMessageText.trimmingCharacters(in: .whitespaces).isEmpty || isSendingMessage)
+            .disabled(newMessageText.trimmingCharacters(in: .whitespaces).isEmpty || isSendingMessage) // Disable if empty or sending
         }
         .padding(.horizontal)
-        .padding(.vertical, 8)
-        .background(.thinMaterial)
+        .padding(.vertical, 8) // Add vertical padding
+        .background(.thinMaterial) // Add a background material
     }
 
     // MARK: - Helper Functions
 
+    // Combined setup function called from .task
     @MainActor
     func setupChat() async {
         if currentUserId == nil { await fetchCurrentUserId() }
         guard currentUserId != nil else { return }
+
         await fetchMessages()
-        subscribeToMessages() // Non-async
+        subscribeToMessages() // Non-async call to setup subscription
     }
 
+    // Function to get current user ID
     @MainActor
     func fetchCurrentUserId() async {
-        guard currentUserId == nil else { return }
+        guard currentUserId == nil else { return } // Fetch only once
         do {
             currentUserId = try await supabase.auth.session.user.id
         } catch {
@@ -153,26 +184,29 @@ struct ChatDetailView: View { // Brace 1 Open
         }
     }
 
+    // Function to fetch initial messages
     @MainActor
     func fetchMessages() async {
-        guard !isLoadingMessages else { return }
+        guard !isLoadingMessages else { return } // Prevent concurrent fetches
         isLoadingMessages = true
-        errorMessage = nil
+        errorMessage = nil // Clear previous errors on retry/fetch
 
         do {
             let fetchedMessages: [ChatMessage] = try await supabase
                 .from("messages")
-                .select()
-                .eq("chat_id", value: chat.id)
-                .order("created_at", ascending: true)
+                .select() // Select columns matching ChatMessage
+                .eq("chat_id", value: chat.id) // Filter by chat ID
+                .order("created_at", ascending: true) // Oldest first
                 .execute()
-                .value
+                .value // Use .value assuming execute returns decoded value
 
             self.messages = fetchedMessages
             print("Fetched \(fetchedMessages.count) messages for chat \(chat.id)")
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            // Scroll after messages are set
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { // Slight delay ensures layout is ready
                  scrollToBottom(proxy: scrollViewProxy, animated: false)
             }
+
         } catch {
             print("❌ Error fetching messages: \(error)")
             errorMessage = "Failed to load messages: \(error.localizedDescription)"
@@ -180,33 +214,54 @@ struct ChatDetailView: View { // Brace 1 Open
         isLoadingMessages = false
     }
 
+    // Updated sendMessage with Optimistic UI
     @MainActor
     func sendMessage() {
         guard let userId = currentUserId, !newMessageText.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-        guard !isSendingMessage else { return }
+        guard !isSendingMessage else { return } // Prevent double sends
 
         let textToSend = newMessageText.trimmingCharacters(in: .whitespaces)
-        newMessageText = ""
-        isSendingMessage = true
+        newMessageText = "" // Clear input field immediately
 
-        Task {
+        // --- Optimistic UI Update ---
+        let optimisticId = -Int.random(in: 1...1000000)
+        let optimisticMessage = ChatMessage(
+            id: optimisticId,
+            chatId: chat.id,
+            senderId: userId,
+            content: textToSend,
+            createdAt: Date() // Use current time locally
+        )
+        messages.append(optimisticMessage) // Add to list immediately
+        scrollToBottom(proxy: scrollViewProxy) // Scroll to show it
+        // --- End Optimistic UI ---
+
+        isSendingMessage = true // Indicate sending state (can disable input)
+        errorMessage = nil // Clear previous errors
+
+        Task { // Perform Supabase operation in background task
             let params = NewMessageParams(chatId: chat.id, senderId: userId, content: textToSend)
             do {
+                // Send to Supabase
                 try await supabase.from("messages").insert(params, returning: .minimal).execute()
                 print("✅ Message sent successfully.")
+                // Realtime should eventually deliver the confirmed message.
             } catch {
                 print("❌ Error sending message: \(error)")
-                errorMessage = "Failed to send message: \(error.localizedDescription)"
-                newMessageText = textToSend
+                errorMessage = "Failed to send message." // Simple error message
+                // --- Revert Optimistic Update on Failure ---
+                messages.removeAll { $0.id == optimisticId }
+                newMessageText = textToSend // Put text back for user to retry
+                // --- End Revert ---
             }
-            isSendingMessage = false
+            isSendingMessage = false // Reset sending state
         }
     }
 
     // Function to subscribe to new messages via Realtime
     @MainActor
     func subscribeToMessages() { // Made non-async
-        guard self.channel == nil else {
+        guard self.channel == nil else { // Subscribe only once
             print("⚠️ Already subscribed or channel exists.")
             return
         }
@@ -215,15 +270,13 @@ struct ChatDetailView: View { // Brace 1 Open
             return
         }
 
-        // Channel topic format
         let channelTopic = "public:messages:chat_id=eq.\(chat.id)"
         print("Subscribing to channel topic: \(channelTopic)")
 
-        // --- Corrected Realtime Subscription using .channel().on().subscribe() ---
         let newChannel = supabase.realtime.channel(channelTopic)
 
         // Define the callback closure (handler)
-        let messageHandler = { (message: RealtimeMessage) in // Renamed to handler
+        let messageHandler = { (message: RealtimeMessage) in
             print("🟢 Realtime Change Received: \(message.payload)")
             let eventType = message.payload["type"] as? String
             guard eventType == "INSERT" else {
@@ -251,42 +304,47 @@ struct ChatDetailView: View { // Brace 1 Open
             }
         }
 
-        // ****** FIX: Correct .on() signature assuming event: String, filter: ChannelFilter, handler: Callback ******
-        // Construct the ChannelFilter object WITHOUT the event
+        // Construct the ChannelFilter object
         let channelFilter = ChannelFilter(
-            // event: "INSERT", // Event is now the first parameter of .on()
+            event: "INSERT",
             schema: "public",
             table: "messages",
-            filter: "chat_id=eq.\(chat.id)" // The filter string
+            filter: "chat_id=eq.\(chat.id)"
         )
 
-        // Subscribe using the .on() method with event, filter object and handler
-        newChannel.on("INSERT", filter: channelFilter, handler: messageHandler) // Use event:, filter:, handler: labels
-        // ****** END FIX ******
+        // Subscribe using the .on() method with ChannelFilter and handler
+        newChannel.on("INSERT", filter: channelFilter, handler: messageHandler)
         .subscribe { status, error in // Handle subscription status changes
             if let error = error {
                 print("🔴 Realtime subscription error: \(error.localizedDescription)")
+                // ****** FIX: Ensure state update is on MainActor ******
                 Task { @MainActor in
                     self.errorMessage = "Realtime connection error."
                     self.channel = nil
                 }
+                // ****** END FIX ******
             } else {
                 print("🟢 Realtime subscription status: \(status)")
                 if status == .subscribed {
+                    // ****** FIX: Ensure state update is on MainActor ******
                     Task { @MainActor in
-                         self.channel = newChannel
+                         self.channel = newChannel // Assign the channel here
                     }
+                    // ****** END FIX ******
                 }
             }
         }
-        // --- End Corrected Realtime Subscription ---
     }
 
 
     // Function to unsubscribe from Realtime channel
     @MainActor
     func unsubscribeFromMessages() async {
-        guard let currentChannel = self.channel else { return }
+        print("Attempting to unsubscribe...") // Add log
+        guard let currentChannel = self.channel else {
+             print("Unsubscribe skipped: Channel is nil.")
+             return
+        }
         print("Unsubscribing from channel: \(currentChannel.topic)")
         do {
             try await currentChannel.unsubscribe()
@@ -294,7 +352,7 @@ struct ChatDetailView: View { // Brace 1 Open
             print("✅ Successfully unsubscribed.")
         } catch {
             print("🔴 Error unsubscribing from channel: \(error)")
-            self.channel = nil
+            self.channel = nil // Clear local state even if unsubscribe fails
         }
     }
 
@@ -317,25 +375,38 @@ struct ChatDetailView: View { // Brace 1 Open
 struct MessageView: View {
     let message: ChatMessage
     let isCurrentUser: Bool
+    let formatter: DateFormatter // Pass formatter
 
     var body: some View {
         HStack {
             if isCurrentUser {
-                Spacer()
-                Text(message.content)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Color.blue)
-                    .foregroundColor(.white)
-                    .clipShape(RoundedCorner(radius: 12, corners: [.topLeft, .topRight, .bottomLeft]))
+                Spacer() // Push to right
+                VStack(alignment: .trailing, spacing: 2) { // Align timestamp below bubble
+                    Text(message.content)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Color.blue)
+                        .foregroundColor(.white)
+                        .clipShape(RoundedCorner(radius: 12, corners: [.topLeft, .topRight, .bottomLeft])) // Chat bubble shape
+                    // Show timestamp below bubble
+                    Text(formatter.string(from: message.createdAt))
+                        .font(.caption2)
+                        .foregroundColor(.gray)
+                }
             } else {
-                Text(message.content)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Color(UIColor.systemGray5))
-                    .foregroundColor(Color(UIColor.label))
-                    .clipShape(RoundedCorner(radius: 12, corners: [.topLeft, .topRight, .bottomRight]))
-                Spacer()
+                VStack(alignment: .leading, spacing: 2) { // Align timestamp below bubble
+                    Text(message.content)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Color(UIColor.systemGray5))
+                        .foregroundColor(Color(UIColor.label)) // Adapts to light/dark mode
+                        .clipShape(RoundedCorner(radius: 12, corners: [.topLeft, .topRight, .bottomRight])) // Chat bubble shape
+                    // Show timestamp below bubble
+                    Text(formatter.string(from: message.createdAt))
+                        .font(.caption2)
+                        .foregroundColor(.gray)
+                }
+                Spacer() // Push to left
             }
         }
     }
@@ -362,6 +433,7 @@ struct RoundedCorner: Shape {
 
     // Embed in NavigationView for the preview to show title bar
     NavigationView {
+        // Use the explicit initializer
         ChatDetailView(chat: sampleChat)
     }
 }
