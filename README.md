@@ -10,8 +10,8 @@ Neighbourly is a community-driven application designed to connect locals who nee
 - **Notifications**: Real-time updates when assistance is needed nearby.
 
 ## Screenshots
-### Login Page
-<img src="screenshots/Login.png" alt="Login" width="300"><img src="screenshots/HomePageView.png" alt="Home Page" width="300">
+### Login Page &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; Home Page
+<img src="screenshots/Login.png" alt="Login" width="300"> <img src="screenshots/HomePageView.png" alt="Home Page" width="300">
 
 
 ### Home Page
