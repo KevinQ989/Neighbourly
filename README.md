@@ -13,7 +13,7 @@ Neighbourly is a community-driven application designed to connect locals who nee
 ### Login Page &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;Home Page
 <img src="screenshots/Login.png" alt="Login" width="300"> <img src="screenshots/HomePageView.png" alt="Home Page" width="300">
 
-### Request Page &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;Chats Page
+### Request Page &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; Chats Page
 <img src="screenshots/Request.png" alt="Request Page" width="300"> <img src="screenshots/Chats.png" alt="Chats Page" width="300">
 
 ### Profile Page
