@@ -10,17 +10,20 @@ Neighbourly is a community-driven application designed to connect locals who nee
 - **Notifications**: Real-time updates when assistance is needed nearby.
 
 ## Screenshots
+### Login Page
+<img src="screenshots/Login.png" alt="Login" width="300">
+
 ### Home Page
-<img src="screenshots/HomePageView.png" alt="Home Page" width="400">
+<img src="screenshots/HomePageView.png" alt="Home Page" width="300">
 
 ### Request Page
-<img src="screenshots/Request.png" alt="Request Page" width="400">
+<img src="screenshots/Request.png" alt="Request Page" width="300">
 
 ### Chats Page
-<img src="screenshots/Chats.png" alt="Chats Page" width="400">
+<img src="screenshots/Chats.png" alt="Chats Page" width="300">
 
 ### Profile Page
-<img src="screenshots/Profile.png" alt="Profile Page" width="400">
+<img src="screenshots/Profile.png" alt="Profile Page" width="300">
 
 ## Problem Statement
 Many individuals, including busy parents, the elderly, the disabled, and the sick, struggle with everyday tasks due to their circumstances. The lack of accessible help leads to stress, reduced quality of life, and safety concerns.
