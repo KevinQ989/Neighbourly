@@ -24,8 +24,8 @@ struct TabBarView: View {
                 .tabItem {
                     Image(systemName: "message.fill")
                 }
-            
-            ProfileView()
+            NavigationView{
+                ProfileView()}
                 .tabItem {
                     Image(systemName: "person.fill")
                 }
