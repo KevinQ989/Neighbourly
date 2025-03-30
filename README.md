@@ -11,7 +11,8 @@ Neighbourly is a community-driven application designed to connect locals who nee
 
 ## Screenshots
 ### Login Page
-<img src="screenshots/Login.png" alt="Login" width="300">
+<img src="screenshots/Login.png" alt="Login" width="300"><img src="screenshots/HomePageView.png" alt="Home Page" width="300">
+
 
 ### Home Page
 <img src="screenshots/HomePageView.png" alt="Home Page" width="300">
