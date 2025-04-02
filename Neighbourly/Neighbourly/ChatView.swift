@@ -30,7 +30,7 @@ struct ChatRow: View {
     }
 
     var body: some View {
-        HStack {
+        HStack(spacing: 12) {
             // --- Use AsyncImage for Avatar ---
             AsyncImage(url: URL(string: chat.otherParticipant.avatarUrl ?? "")) { phase in
                 switch phase {
@@ -53,25 +53,49 @@ struct ChatRow: View {
             .overlay(Circle().stroke(Color.gray.opacity(0.2), lineWidth: 1))
             // --- End AsyncImage ---
 
-            VStack(alignment: .leading) {
+            VStack(alignment: .leading, spacing: 2) { // Adjust spacing
                 HStack {
-                    // Other participant's name
                     Text(chat.otherParticipant.fullName ?? chat.otherParticipant.username ?? "Unknown User")
                         .font(.headline)
                     Spacer()
-                    // Display last message timestamp (relative)
                     Text(formatTimestamp(chat.lastMessageTimestamp))
-                        .font(.subheadline)
+                        .font(.caption) // Make timestamp smaller
                         .foregroundColor(.gray)
                 }
-                // Display last message content
-                Text(chat.lastMessageContent ?? "No messages yet")
+                // Add Request Title if available
+                if let requestTitle = chat.requestTitle {
+                    Text("Re: \(requestTitle)") // Prefix with "Re:"
+                        .font(.caption) // Smaller font for request title
+                        .foregroundColor(.blue) // Use a distinct color
+                        .lineLimit(1)
+                }
+                // Last Message Content
+                Text(chat.lastMessageContent ?? (chat.requestTitle == nil ? "No messages yet" : "Chat started")) // Adjust placeholder
                     .font(.subheadline)
                     .foregroundColor(.gray)
                     .lineLimit(1)
             }
+            // --- END MODIFY Middle Content ---
             Spacer()
-
+            
+            // --- ADD Request Image (Conditional) ---
+            // Only show if requestImageUrl exists and is not empty
+            if let imageUrl = chat.requestImageUrl, !imageUrl.isEmpty {
+                AsyncImage(url: URL(string: imageUrl)) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().aspectRatio(contentMode: .fill)
+                    case .empty, .failure:
+                        EmptyView() // Don't show placeholder if image fails/missing
+                    @unknown default:
+                        EmptyView()
+                    }
+                }
+                .frame(width: 45, height: 45) // Adjust size as needed
+                .clipped()
+                .cornerRadius(6)
+            }
+            // --- END ADD Request Image ---
         }
         .padding(.vertical, 8)
     }
@@ -189,21 +213,50 @@ struct ChatView: View { // Brace 1 Open
             // 1. Get current user ID
             let currentUserId = try await supabase.auth.session.user.id
 
-            // Query 1: Fetch basic chat info
-            struct BasicChatInfo: Decodable, Identifiable {
-                let id: Int; let requestId: Int?; let requesterId: UUID; let helperId: UUID; let createdAt: Date
-                 enum CodingKeys: String, CodingKey { case id; case requestId = "request_id"; case requesterId = "requester_id"; case helperId = "helper_id"; case createdAt = "created_at" }
-            }
-            let basicChats: [BasicChatInfo] = try await supabase.from("chats").select("id, request_id, requester_id, helper_id, created_at").or("requester_id.eq.\(currentUserId),helper_id.eq.\(currentUserId)").order("created_at", ascending: false).execute().value
+            struct BasicChatInfoWithRequest: Decodable, Identifiable {
+                let id: Int
+                let requestId: Int?
+                let requesterId: UUID
+                let helperId: UUID
+                let createdAt: Date
+                // Nested struct to decode related request data
+                struct RequestInfo: Decodable {
+                    let title: String? // Make optional in case request is deleted
+                    let imageUrl: String?
+                    enum CodingKeys: String, CodingKey {
+                        case title
+                        case imageUrl = "image_url"
+                    }
+                }
+                let requests: RequestInfo? // Use table name 'requests'
 
-            guard !basicChats.isEmpty else {
+                enum CodingKeys: String, CodingKey {
+                    case id
+                    case requestId = "request_id"
+                    case requesterId = "requester_id"
+                    case helperId = "helper_id"
+                    case createdAt = "created_at"
+                    case requests // Matches the related table name
+                }
+            }
+
+            // Select chat columns AND specific columns from the related 'requests' table
+            let query = supabase.from("chats")
+                .select("id, request_id, requester_id, helper_id, created_at, requests(title, image_url)") // <-- JOIN query
+                .or("requester_id.eq.\(currentUserId),helper_id.eq.\(currentUserId)")
+                .order("created_at", ascending: false) // Keep ordering if needed
+
+            let basicChatsWithRequests: [BasicChatInfoWithRequest] = try await query.execute().value
+            // --- END MODIFY Query 1 ---
+
+            guard !basicChatsWithRequests.isEmpty else {
                 self.chats = []; isLoading = false; print("No chats found for user."); return
             }
 
             // 3. Prepare for fetching profiles and latest messages
             var otherUserIds = Set<UUID>()
-            let chatIds = basicChats.map { $0.id }
-            for basicChat in basicChats { otherUserIds.insert((basicChat.requesterId == currentUserId) ? basicChat.helperId : basicChat.requesterId) }
+            let chatIds = basicChatsWithRequests.map { $0.id }
+            for basicChat in basicChatsWithRequests { otherUserIds.insert((basicChat.requesterId == currentUserId) ? basicChat.helperId : basicChat.requesterId) }
 
             // Query 2: Fetch profiles
             let profiles: [Profile] = try await supabase.from("profiles").select("id, username, full_name, avatar_url").in("id", value: Array(otherUserIds)).execute().value
@@ -219,18 +272,27 @@ struct ChatView: View { // Brace 1 Open
 
             // 4. Combine results
             var populatedChats: [Chat] = []
-            for basicChat in basicChats { // Brace 13 Open
+            for basicChat in basicChatsWithRequests { // Brace 13 Open
                 let otherUserId = (basicChat.requesterId == currentUserId) ? basicChat.helperId : basicChat.requesterId
                 guard let otherProfile = profilesById[otherUserId] else {
                     print("⚠️ Profile not found for user \(otherUserId) in chat \(basicChat.id). Creating placeholder.")
                     let placeholderProfile = Profile(id: otherUserId, username: "Unknown", fullName: "Unknown User", website: nil, avatarUrl: nil)
                     let latestMsg = latestMessageByChatId[basicChat.id]
-                    let chat = Chat(id: basicChat.id, requestId: basicChat.requestId, otherParticipant: placeholderProfile, createdAt: basicChat.createdAt, lastMessageContent: latestMsg?.content, lastMessageTimestamp: latestMsg?.createdAt)
+                    let chat = Chat(id: basicChat.id, requestId: basicChat.requestId, otherParticipant: placeholderProfile, createdAt: basicChat.createdAt, lastMessageContent: latestMsg?.content, lastMessageTimestamp: latestMsg?.createdAt, requestTitle: basicChat.requests?.title, requestImageUrl: basicChat.requests?.imageUrl)
                     populatedChats.append(chat)
                     continue
                 }
                 let latestMsg = latestMessageByChatId[basicChat.id]
-                let chat = Chat(id: basicChat.id, requestId: basicChat.requestId, otherParticipant: otherProfile, createdAt: basicChat.createdAt, lastMessageContent: latestMsg?.content, lastMessageTimestamp: latestMsg?.createdAt)
+                let chat = Chat(
+                    id: basicChat.id,
+                    requestId: basicChat.requestId,
+                    otherParticipant: otherProfile,
+                    createdAt: basicChat.createdAt,
+                    lastMessageContent: latestMsg?.content,
+                    lastMessageTimestamp: latestMsg?.createdAt,
+                    requestTitle: basicChat.requests?.title, // Get from nested struct
+                    requestImageUrl: basicChat.requests?.imageUrl // Get from nested struct
+                )
                 populatedChats.append(chat)
             } // Brace 13 Close
 

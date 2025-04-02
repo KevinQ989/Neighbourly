@@ -183,6 +183,11 @@ struct Chat: Identifiable, Equatable, Hashable { // Removed Decodable for now as
     var lastMessageContent: String? // Mutable for combining results
     var lastMessageTimestamp: Date? // Mutable for combining results
     let createdAt: Date // When the chat was created
+    
+    // --- ADDED Properties for Request Context ---
+    let requestTitle: String?
+    let requestImageUrl: String?
+    // --- END ADDED Properties ---
 
     // Implement Equatable based on ID
     static func == (lhs: Chat, rhs: Chat) -> Bool {
@@ -194,13 +199,15 @@ struct Chat: Identifiable, Equatable, Hashable { // Removed Decodable for now as
      }
 
     // Initializer for combining results
-    init(id: Int, requestId: Int?, otherParticipant: Profile, createdAt: Date, lastMessageContent: String? = nil, lastMessageTimestamp: Date? = nil) {
+    init(id: Int, requestId: Int?, otherParticipant: Profile, createdAt: Date, lastMessageContent: String? = nil, lastMessageTimestamp: Date? = nil, requestTitle: String? = nil, requestImageUrl: String? = nil) {
         self.id = id
         self.requestId = requestId
         self.otherParticipant = otherParticipant
         self.createdAt = createdAt
         self.lastMessageContent = lastMessageContent
         self.lastMessageTimestamp = lastMessageTimestamp
+        self.requestTitle = requestTitle
+        self.requestImageUrl = requestImageUrl
     }
 }
 
