@@ -481,16 +481,39 @@ struct CategoryView: View { // Brace 37 Open
     let category: Category
     var body: some View { // Brace 38 Open
         VStack { // Brace 39 Open
-            // Use placeholder if needed
-            Image(systemName: "tag") // Placeholder
-                .resizable()
-                .scaledToFit()
-                .frame(width: 50, height: 50)
-                .padding(10)
-                .background(Color(category.color).opacity(0.2))
-                .foregroundColor(Color(category.color))
-                .clipShape(Circle())
-                // .overlay(Circle().stroke(category.color.opacity(0.2), lineWidth: 1))
+            AsyncImage(url: URL(string: category.imageurl)) { phase in
+                switch phase {
+                case .empty:
+                    // Show placeholder or loading indicator
+                    ProgressView()
+                        .frame(width: 50, height: 50)
+                case .success(let image):
+                    // Show the loaded image
+                    image
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 50, height: 50)
+                        .clipShape(Circle())
+                case .failure:
+                    // Show fallback for failed loads
+                    Image(systemName: "tag.fill")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 50, height: 50)
+                        .foregroundColor(Color(category.color))
+                @unknown default:
+                    EmptyView()
+                }
+            }
+            .frame(width: 50, height: 50)
+            .padding(10)
+            .background(Color(category.color).opacity(0.2))
+            .clipShape(Circle())
+            .overlay(
+                Circle()
+                    .stroke(Color(category.color), lineWidth: 2)
+            )
+
 
             Text(category.categoryname)
                 .font(.caption)
