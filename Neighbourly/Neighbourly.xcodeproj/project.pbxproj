@@ -427,6 +427,8 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Neighbourly/Info.plist;
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Neighbourly needs your location to show nearby requests and center the map.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "To upload images for your requests.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -456,6 +458,8 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Neighbourly/Info.plist;
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Neighbourly needs your location to show nearby requests and center the map.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "To upload images for your requests.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
