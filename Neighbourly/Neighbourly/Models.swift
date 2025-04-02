@@ -165,6 +165,16 @@ struct ChatMessage: Decodable, Identifiable, Hashable {
     }
 }
 
+struct Category: Identifiable, Decodable {
+    // Use categoryid as the id for Identifiable
+    var id: Int { categoryid }
+    
+    let categoryid: Int
+    let categoryname: String
+    let color: String // Store color as a string from Supabase
+    let imageurl: String
+}
+
 // Represents a chat thread, designed for the ChatView list
 struct Chat: Identifiable, Equatable, Hashable { // Removed Decodable for now as we construct manually
     let id: Int // Chat ID

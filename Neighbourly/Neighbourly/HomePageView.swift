@@ -17,28 +17,6 @@ struct EquatableCoordinate: Equatable {
     }
 }
 
-// MARK: - Category Struct
-struct Category: Identifiable {
-    let id = UUID()
-    let name: String
-    let imageName: String
-    let color: Color
-
-    init(name: String, imageName: String) {
-        self.name = name
-        self.imageName = imageName
-        // Assign colors based on category name
-        switch name {
-        case "Moving Help": self.color = .blue
-        case "Tech": self.color = .green
-        case "Groceries": self.color = .orange
-        case "Pet Care": self.color = .purple
-        case "Home Repair": self.color = .red
-        default: self.color = .gray
-        }
-    }
-}
-
 // MARK: - Request Card View
 struct RequestCard: View {
     // Use RequestData model from Models.swift
@@ -136,15 +114,10 @@ struct HomePageView: View {
     @State private var nearbyRequests: [RequestData] = [] // All fetched requests
     @State private var isLoadingRequests = false
     @State private var requestError: String?
-
-    // Sample Categories
-    let categories = [
-        Category(name: "Moving Help", imageName: "moving_help"),
-        Category(name: "Tech", imageName: "tech"),
-        Category(name: "Groceries", imageName: "groceries"),
-        Category(name: "Pet Care", imageName: "pet_care"),
-        Category(name: "Home Repair", imageName: "home_repair")
-    ]
+    
+    @State private var categories: [Category] = []
+    @State private var isLoadingCategories = false
+    @State private var categoryError: String?
 
     // Computed properties
     private var equatableUserLocation: EquatableCoordinate {
@@ -214,18 +187,31 @@ struct HomePageView: View {
                             } // Brace 6 Close
                             .padding(.horizontal)
 
-                            ScrollView(.horizontal, showsIndicators: false) { // Brace 7 Open
-                                HStack(spacing: 20) { // Brace 8 Open
-                                    ForEach(categories) { category in // Brace 9 Open
-                                        // Update NavigationLink destination later if needed
-                                        NavigationLink(destination: CategoryDetailView(category: category, requests: nearbyRequests)) { // Brace 10 Open
-                                            CategoryView(category: category)
-                                        } // Brace 10 Close
-                                    } // Brace 9 Close
-                                } // Brace 8 Close
-                                .padding(.horizontal)
-                                .padding(.bottom, 5)
-                            } // Brace 7 Close
+                            if isLoadingCategories {
+                                ProgressView()
+                                    .padding()
+                                    .frame(maxWidth: .infinity)
+                            } else if let categoryError {
+                                Text("Error loading categories: \(categoryError)")
+                                    .foregroundColor(.red)
+                                    .padding()
+                            } else if categories.isEmpty {
+                                Text("No categories available.")
+                                    .foregroundColor(.gray)
+                                    .padding()
+                            } else {
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 20) {
+                                        ForEach(categories) { category in
+                                            NavigationLink(destination: CategoryDetailView(category: category, requests: nearbyRequests)) {
+                                                CategoryView(category: category)
+                                            }
+                                        }
+                                    }
+                                    .padding(.horizontal)
+                                    .padding(.bottom, 5)
+                                }
+                            }
                         } // Brace 5 Close
 
                         // --- Nearby Requests section (Uses filteredRequests) ---
@@ -334,6 +320,10 @@ struct HomePageView: View {
             }
             // Start updates if already authorized or when authorization changes
             locationManager.startUpdatingLocation()
+            
+            Task {
+                await fetchCategories()
+            }
         }
         .task(id: equatableUserLocation) { // React to location changes
             // Center map once when location first becomes available
@@ -362,7 +352,29 @@ struct HomePageView: View {
             // Optionally prompt user to enable location services
         }
     } // Brace 25 Close
-
+    
+    @MainActor
+    func fetchCategories() async {
+        isLoadingCategories = true
+        categoryError = nil
+        
+        do {
+            let fetchedCategories: [Category] = try await supabase
+                .from("categories")
+                .select()
+                .execute()
+                .value
+            
+            self.categories = fetchedCategories
+            print("Fetched \(fetchedCategories.count) categories.")
+        } catch {
+            print("❌ Error fetching categories: \(error)")
+            categoryError = error.localizedDescription
+        }
+        
+        isLoadingCategories = false
+    }
+    
     // --- Updated Function to Fetch Nearby Requests using RPC ---
     @MainActor
     func fetchNearbyRequests() async { // Brace 26 Open
@@ -421,7 +433,7 @@ struct CategoryDetailView: View { // Brace 29 Open
 
     // Filtered requests for the specific category
     var categoryRequests: [RequestData] { // Brace 30 Open
-        requests.filter { $0.category == category.name }
+        requests.filter { $0.category == category.categoryname }
     } // Brace 30 Close
 
     var body: some View { // Brace 31 Open
@@ -433,15 +445,15 @@ struct CategoryDetailView: View { // Brace 29 Open
                     .resizable()
                     .scaledToFit()
                     .frame(width: 50, height: 50)
-                    .foregroundColor(category.color)
+                    .foregroundColor(Color(category.color))
                     // .clipShape(Circle()) // Keep if using actual images
 
-                Text(category.name)
+                Text(category.categoryname)
                     .font(.title).fontWeight(.bold)
                 Spacer()
             } // Brace 33 Close
             .padding()
-            .background(category.color.opacity(0.1))
+            .background(Color(category.color).opacity(0.1))
 
             // List of requests for this category
             if categoryRequests.isEmpty { // Brace 34 Open
@@ -475,12 +487,12 @@ struct CategoryView: View { // Brace 37 Open
                 .scaledToFit()
                 .frame(width: 50, height: 50)
                 .padding(10)
-                .background(category.color.opacity(0.2))
-                .foregroundColor(category.color)
+                .background(Color(category.color).opacity(0.2))
+                .foregroundColor(Color(category.color))
                 .clipShape(Circle())
                 // .overlay(Circle().stroke(category.color.opacity(0.2), lineWidth: 1))
 
-            Text(category.name)
+            Text(category.categoryname)
                 .font(.caption)
                 .multilineTextAlignment(.center)
         } // Brace 39 Close
