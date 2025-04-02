@@ -4,6 +4,19 @@ import SwiftUI // <-- ****** THIS LINE IS CRUCIAL ******
 import Foundation
 import Supabase
 
+// --- ADD Environment Key ---
+struct AuthStateEnvironmentKey: EnvironmentKey {
+    static let defaultValue: Bool = false // Default to not authenticated
+}
+
+extension EnvironmentValues {
+    var isAuthenticatedValue: Bool {
+        get { self[AuthStateEnvironmentKey.self] }
+        set { self[AuthStateEnvironmentKey.self] = newValue }
+    }
+}
+// --- END Environment Key ---
+
 struct AppView: View {
   // Authentication state
   @State var isAuthenticated = false
@@ -37,6 +50,7 @@ struct AppView: View {
       } else {
         // User is logged in and profile exists, show main app
         TabBarView()
+              .environment(\.isAuthenticatedValue, true)
       }
     }
     .task {
@@ -50,43 +64,52 @@ struct AppView: View {
       // Check initial session synchronously (optional but can speed up startup)
       do {
           let initialSession = try await supabase.auth.session
-          isAuthenticated = initialSession != nil
-          print("Initial session check: isAuthenticated = \(isAuthenticated)")
-
-          if isAuthenticated {
-              await checkProfileExists() // Check profile immediately if already logged in
+          let sessionIsValid = initialSession != nil
+          print("Initial session check: sessionIsValid = \(sessionIsValid)")
+          // Update state on main thread
+          await MainActor.run { isAuthenticated = sessionIsValid }
+          if sessionIsValid {
+              await checkProfileExists()
           }
       } catch {
           print("Error checking initial session: \(error)")
-          isAuthenticated = false // Assume not authenticated if error
+          await MainActor.run { isAuthenticated = false }
       }
-      checkingAuthState = false // Finished initial auth check
+        await MainActor.run { checkingAuthState = false }
 
       // Listen for subsequent auth changes (sign in, sign out, token refresh)
       for await state in supabase.auth.authStateChanges {
           let session = state.session
           let event = state.event
-          print("Auth state changed: \(event), session: \(session != nil)")
+          let sessionIsValid = session != nil
+          print("Auth state changed: \(event), sessionIsValid: \(sessionIsValid)")
 
           // Use Task to ensure UI updates are on the main thread
           // Although @State updates usually handle this, it's safer within the loop
           await MainActor.run {
-              self.isAuthenticated = session != nil
+              self.isAuthenticated = sessionIsValid
 
               if event == .signedIn {
-                  // User just signed in, check if their profile exists
-                  // Need to wrap async call in Task if not already in one
                   Task { await checkProfileExists() }
               } else if event == .signedOut {
-                  // User signed out, reset profile state
                   self.needsProfileSetup = false
                   self.checkingProfile = false
+              } else if event == .tokenRefreshed {
+                   print("Auth token refreshed.")
+                   // Re-check profile if needed, or just ensure isAuthenticated is true
+                   if !self.isAuthenticated { self.isAuthenticated = true }
+              } else if event == .userDeleted {
+                   print("User deleted.")
+                   self.isAuthenticated = false
+                   self.needsProfileSetup = false
+                   self.checkingProfile = false
               }
               // Handle other events like password recovery if needed
           }
       }
-      print("Auth listener loop finished (should not happen unless view disappears).")
+        print("Auth listener loop finished (view disappeared?).")
     }
+    .environment(\.isAuthenticatedValue, isAuthenticated)
   }
 
   // Function to check if the logged-in user has a profile (Corrected)

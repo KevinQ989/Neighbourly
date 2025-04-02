@@ -72,13 +72,6 @@ struct ChatRow: View {
             }
             Spacer()
 
-            // Placeholder Request Image
-            Image(systemName: "archivebox.fill")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 40, height: 40)
-                .foregroundColor(.gray.opacity(0.5))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
         }
         .padding(.vertical, 8)
     }
@@ -86,6 +79,8 @@ struct ChatRow: View {
 
 
 struct ChatView: View { // Brace 1 Open
+    @Environment(\.isAuthenticatedValue) private var isViewAuthenticated
+    
     // State
     @State private var selectedTab: ChatFilter = .all
     @State private var chats: [Chat] = []
@@ -129,35 +124,38 @@ struct ChatView: View { // Brace 1 Open
             */
 
             // Handle Loading/Error/Empty States
-            if isLoading { // Brace 3 Open
+            if isLoading {
                 ProgressView("Loading Chats...")
                     .frame(maxHeight: .infinity)
-            } else if let errorMessage { // Brace 3 Close, Brace 4 Open
-                VStack { // Brace 5 Open
+            } else if let errorMessage {
+                VStack {
                     Text("Error loading chats:")
                     Text(errorMessage).foregroundColor(.red).font(.caption)
                     Button("Retry") { Task { await fetchChats() } }
                         .padding(.top)
-                } // Brace 5 Close
+                }
                 .frame(maxHeight: .infinity)
-            } else if chats.isEmpty { // Brace 4 Close, Brace 6 Open
+            } else if chats.isEmpty {
                 Text("No chats yet.")
                     .foregroundColor(.gray)
                     .frame(maxHeight: .infinity)
-            } else { // Brace 6 Close, Brace 7 Open
-                // List of Chats
+            } else {
+                // --- MODIFIED List of Chats ---
                 List { // Use List directly
-                    ForEach(chats) { chat in // Use ForEach within List
+                    ForEach(chats) { chat in
+                        // Wrap ChatRow in NavigationLink to ChatDetailView
                         NavigationLink(destination: ChatDetailView(chat: chat)) {
-                            ChatRow(chat: chat) // Uses updated ChatRow
+                             ChatRow(chat: chat) // Your existing ChatRow view
                         }
                     }
                 } // End List
-                .listStyle(PlainListStyle())
-                .refreshable {
+                .listStyle(PlainListStyle()) // Use plain style
+                .refreshable { // Keep refreshable
                     await fetchChats()
                 }
-            } // Brace 7 Close
+                // --- END MODIFIED List ---
+            }
+
         } // End VStack
         .navigationTitle("Chats")
         .task { // Fetch chats when the view appears
@@ -168,8 +166,24 @@ struct ChatView: View { // Brace 1 Open
     // --- Updated fetchChats Function ---
     @MainActor
     func fetchChats() async { // Brace 11 Open
+        // --- MODIFY Start of function ---
+        guard isViewAuthenticated else {
+            print("❌ ChatView fetchChats: View not authenticated (environment). Skipping fetch.")
+            self.errorMessage = "Please log in to view chats."
+            self.isLoading = false
+            self.chats = []
+            return
+        }
+        // --- END MODIFICATION ---
+
+        // Remove the explicit `try await supabase.auth.session` check here,
+        // as we now rely on the environment value passed down from AppView.
+
+        guard !isLoading else { /* ... */ return }
+
         isLoading = true
         errorMessage = nil
+        print("ChatView fetchChats: Starting fetch...")
 
         do { // Brace 12 Open
             // 1. Get current user ID

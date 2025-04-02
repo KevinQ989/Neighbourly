@@ -312,8 +312,6 @@ struct HomePageView: View {
             } // Brace 24 Close
 
         } // Brace 1 Close (End ZStack)
-        .navigationTitle("Home")
-        .navigationBarTitleDisplayMode(.inline)
         .onAppear { // Request permission and start updates when view appears
             if locationManager.authorizationStatus == .notDetermined {
                 locationManager.requestPermission()

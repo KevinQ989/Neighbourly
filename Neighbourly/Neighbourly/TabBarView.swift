@@ -11,24 +11,34 @@ struct TabBarView: View {
     var body: some View {
         TabView {
             HomeContentView()
-                .tabItem {
-                    Image(systemName: "house.fill")
-                }
+            .tabItem {
+                Label("Home", systemImage: "house.fill")
+            }
+            .tag("HomeTab")
             
             NewRequestView()
                 .tabItem {
-                    Image(systemName: "plus.circle.fill")
+                    Label("New Request", systemImage: "plus.circle.fill")
                 }
+                .tag("NewRequestTab")
             
-            ChatView()
-                .tabItem {
-                    Image(systemName: "message.fill")
-                }
-            NavigationView{
-                ProfileView()}
-                .tabItem {
-                    Image(systemName: "person.fill")
-                }
+            NavigationView {
+                ChatView()
+            }
+            .navigationViewStyle(.stack)
+            .tabItem {
+                Label("Chats", systemImage: "message.fill")
+            }
+            .tag("ChatTab")
+            
+            NavigationView {
+                ProfileView()
+            }
+            .navigationViewStyle(.stack)
+            .tabItem {
+                Label("Profile", systemImage: "person.fill")
+            }
+            .tag("ProfileTab")
         }
         .accentColor(.black)
     }

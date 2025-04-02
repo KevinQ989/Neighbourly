@@ -15,6 +15,11 @@ struct ChatDetailView: View { // Brace 1 Open
     @State private var isSendingMessage = false
     @State private var errorMessage: String?
     @State private var currentUserId: UUID?
+    
+    // --- ADD State for Associated Request ---
+    @State private var associatedRequest: RequestData? = nil
+    @State private var isLoadingRequest = false
+    // --- END State ---
 
     // State for Realtime subscription
     @State private var channel: RealtimeChannel? = nil
@@ -82,47 +87,40 @@ struct ChatDetailView: View { // Brace 1 Open
     // Extracted Message List View to help compiler
     @ViewBuilder
     private var messageListView: some View {
-        // Use a Group to help compiler with conditional content
         Group {
             if isLoadingMessages && messages.isEmpty {
-                // Centered Loading Indicator
-                VStack { Spacer(); ProgressView("Loading Messages..."); Spacer() }
-                    .frame(height: 200) // Give it some height
+                VStack { Spacer(); ProgressView("Loading Messages..."); Spacer() }.frame(maxHeight: .infinity) // Give it more space
             } else if let errorMessage {
-                // Centered Error Message
-                VStack {
-                    Spacer()
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundColor(.orange).font(.largeTitle).padding(.bottom, 5)
-                    Text("Error Loading Messages").font(.headline)
-                    Text(errorMessage).font(.caption).foregroundColor(.secondary).multilineTextAlignment(.center)
-                    Button("Retry") { Task { await fetchMessages() } }.padding(.top)
-                    Spacer()
-                }
-                .padding()
-                .frame(height: 200)
+                VStack { /* ... Error display ... */ }.padding().frame(maxHeight: .infinity)
             } else if messages.isEmpty {
-                 // Centered Empty State Message
-                 VStack {
-                     Spacer()
-                     Text("No messages yet. Start the conversation!")
-                         .foregroundColor(.secondary)
-                     Spacer()
-                 }
-                 .frame(height: 200) // Give it some height
+                 VStack { Spacer(); Text("No messages yet. Start the conversation!").foregroundColor(.secondary); Spacer() }.frame(maxHeight: .infinity)
             } else {
-                // Message Bubbles
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(spacing: 12) {
                             ForEach(messages) { message in
-                                // Pass timestamp formatter
-                                MessageView(message: message, isCurrentUser: message.senderId == currentUserId, formatter: messageTimestampFormatter)
-                                    .id(message.id)
+                                // --- ADD Request Context Display Logic ---
+                                // Check if it's the first message AND there's an associated request
+                                if message.id == messages.first?.id, let assocReq = associatedRequest {
+                                    NavigationLink(destination: RequestDetailView(request: assocReq)) {
+                                        RequestContextView(request: assocReq) // New subview for context
+                                    }
+                                    .padding(.vertical, 5) // Add some spacing
+                                    .buttonStyle(.plain) // Make link look like content
+                                }
+                                // --- END Request Context Display Logic ---
+
+                                // Display the actual message bubble
+                                MessageView(
+                                    message: message,
+                                    isCurrentUser: message.senderId == currentUserId,
+                                    formatter: messageTimestampFormatter
+                                )
+                                .id(message.id) // Keep ID for scrolling
                             }
                         }
                         .padding(.horizontal)
-                        .padding(.top)
+                        .padding(.top) // Add padding at the top
                     }
                     .onAppear {
                         scrollViewProxy = proxy
@@ -133,6 +131,7 @@ struct ChatDetailView: View { // Brace 1 Open
             }
         } // End Group
     }
+    // --- END MODIFY messageListView ---
 
     // Extracted Message Input Area View
     private var messageInputArea: some View {
@@ -367,8 +366,75 @@ struct ChatDetailView: View { // Brace 1 Open
             proxy.scrollTo(lastMessageId, anchor: .bottom)
         }
     }
+    
+    // --- ADD fetchAssociatedRequest function ---
+    @MainActor
+    func fetchAssociatedRequest() async {
+        guard let reqId = chat.requestId else {
+            print("Chat \(chat.id) is not associated with a specific request.")
+            return // No request ID to fetch
+        }
+        guard associatedRequest == nil, !isLoadingRequest else { return } // Fetch only once
+
+        isLoadingRequest = true
+        print("Fetching associated request with ID: \(reqId)")
+        do {
+            let fetchedRequest: RequestData = try await supabase
+                .from("requests")
+                .select() // Select columns matching RequestData
+                .eq("id", value: reqId)
+                .single() // Expect exactly one request
+                .execute()
+                .value
+            self.associatedRequest = fetchedRequest
+            print("✅ Fetched associated request: \(fetchedRequest.title)")
+        } catch {
+            print("❌ Error fetching associated request \(reqId): \(error)")
+            // Handle error appropriately (e.g., show a message)
+            // For now, we just log it. The request context won't appear.
+        }
+        isLoadingRequest = false
+    }
+    // --- END fetchAssociatedRequest ---
 
 } // Brace 1 Close
+
+// --- ADD THIS NEW SUBVIEW for displaying request context ---
+struct RequestContextView: View {
+    let request: RequestData
+
+    var body: some View {
+        HStack(spacing: 8) {
+            // Request Image
+            AsyncImage(url: URL(string: request.imageUrl ?? "")) { phase in
+                 switch phase {
+                 case .empty: ZStack { Rectangle().fill(Color.gray.opacity(0.1)); ProgressView() }
+                 case .success(let image): image.resizable().aspectRatio(contentMode: .fill)
+                 case .failure: ZStack { Rectangle().fill(Color.gray.opacity(0.1)); Image(systemName: "photo.fill").foregroundColor(.gray) }
+                 @unknown default: EmptyView()
+                 }
+             }
+             .frame(width: 40, height: 40).clipped().cornerRadius(5)
+
+            // Request Title
+            VStack(alignment: .leading) {
+                 Text("Regarding Request:")
+                     .font(.caption2)
+                     .foregroundColor(.gray)
+                 Text(request.title)
+                     .font(.caption)
+                     .fontWeight(.medium)
+                     .lineLimit(1)
+            }
+            Spacer()
+            Image(systemName: "chevron.right").foregroundColor(.gray) // Indicate tappable
+        }
+        .padding(8)
+        .background(Color(UIColor.systemGray5)) // Subtle background
+        .cornerRadius(8)
+    }
+}
+// --- END RequestContextView ---
 
 // MARK: - Message View Subview
 
