@@ -114,6 +114,14 @@ struct NearbyRequestsParams: Encodable {
     let distance_meters: Double
 }
 
+struct HomeContentView: View {
+    var body: some View {
+        NavigationView {
+            HomePageView()
+        }
+    }
+}
+
 // MARK: - Home Page View
 struct HomePageView: View {
     // State Variables
@@ -531,11 +539,5 @@ struct FullScreenMapView: View { // Brace 40 Open
 
 // MARK: - Preview
 #Preview { // Brace 48 Open
-    // Wrap HomePageView in a structure that provides navigation context if needed
-    TabView { // Brace 49 Open
-        NavigationView { // Add NavigationView for preview context
-             HomePageView()
-        }
-            .tabItem { Label("Home", systemImage: "house") }
-    } // Brace 49 Close
-} // Brace 48 Close
+    HomeContentView()
+}
