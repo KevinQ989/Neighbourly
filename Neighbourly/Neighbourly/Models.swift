@@ -188,6 +188,9 @@ struct Chat: Identifiable, Equatable, Hashable { // Removed Decodable for now as
     let requestTitle: String?
     let requestImageUrl: String?
     // --- END ADDED Properties ---
+    
+    let lastMessageSenderId: UUID?
+    var isUnread: Bool = false // Default to false, will be set during fetch
 
     // Implement Equatable based on ID
     static func == (lhs: Chat, rhs: Chat) -> Bool {
@@ -199,7 +202,7 @@ struct Chat: Identifiable, Equatable, Hashable { // Removed Decodable for now as
      }
 
     // Initializer for combining results
-    init(id: Int, requestId: Int?, otherParticipant: Profile, createdAt: Date, lastMessageContent: String? = nil, lastMessageTimestamp: Date? = nil, requestTitle: String? = nil, requestImageUrl: String? = nil) {
+    init(id: Int, requestId: Int?, otherParticipant: Profile, createdAt: Date, lastMessageContent: String? = nil, lastMessageTimestamp: Date? = nil, requestTitle: String? = nil, requestImageUrl: String? = nil, lastMessageSenderId: UUID? = nil, isUnread: Bool = false) {
         self.id = id
         self.requestId = requestId
         self.otherParticipant = otherParticipant
@@ -208,6 +211,8 @@ struct Chat: Identifiable, Equatable, Hashable { // Removed Decodable for now as
         self.lastMessageTimestamp = lastMessageTimestamp
         self.requestTitle = requestTitle
         self.requestImageUrl = requestImageUrl
+        self.lastMessageSenderId = lastMessageSenderId
+        self.isUnread = isUnread
     }
 }
 
