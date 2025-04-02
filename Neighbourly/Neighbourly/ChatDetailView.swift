@@ -73,6 +73,8 @@ struct ChatDetailView: View { // Brace 1 Open
         .navigationBarTitleDisplayMode(.inline)
         .task { // Use .task for async setup and automatic cleanup
             await setupChat()
+            await fetchAssociatedRequest()
+            await markChatAsRead()
             // Explicit cleanup using the return closure from .task
             return {
                 listenerTask?.cancel() // Cancel listener task
@@ -396,6 +398,36 @@ struct ChatDetailView: View { // Brace 1 Open
         isLoadingRequest = false
     }
     // --- END fetchAssociatedRequest ---
+    
+    // --- ADD Function to update read status ---
+    @MainActor
+    func markChatAsRead() async {
+        guard let userId = currentUserId else {
+            print("⚠️ markChatAsRead: Cannot mark as read, user ID not available.")
+            return
+        }
+        print("➡️ markChatAsRead: Updating last_read_at for chat \(chat.id), user \(userId)")
+        do {
+            // Upsert: Insert or update the read status for this user and chat
+            // Sets last_read_at to the current time.
+            struct ReadStatusParams: Encodable {
+                let chat_id: Int
+                let user_id: UUID
+                let last_read_at: Date // Use current date
+            }
+            let params = ReadStatusParams(chat_id: chat.id, user_id: userId, last_read_at: Date())
+
+            try await supabase
+                .from("chat_read_status")
+                .upsert(params, onConflict: "chat_id, user_id") // Specify conflict columns
+                .execute()
+            print("✅ markChatAsRead: Successfully updated read status.")
+        } catch {
+            print("❌ markChatAsRead: Error updating read status - \(error)")
+            // Handle error - maybe retry later? For now, just log.
+        }
+    }
+    // --- END Function ---
 
 } // Brace 1 Close
 

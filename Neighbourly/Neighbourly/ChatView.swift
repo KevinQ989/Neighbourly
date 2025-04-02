@@ -11,24 +11,25 @@ enum ChatFilter {
 // Updated ChatRow to use the new Chat model and display last message & avatar
 struct ChatRow: View {
     let chat: Chat
-
+    let currentUserId: UUID?
+    
     // Date formatter for relative time
     private static var relativeDateFormatter: RelativeDateTimeFormatter = {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
         return formatter
     }()
-
+    
     // Function to format timestamp relatively
     private func formatTimestamp(_ date: Date?) -> String {
         guard let date = date else { return "" }
         if Calendar.current.isDateInToday(date) || Calendar.current.isDateInYesterday(date) {
-             return ChatRow.relativeDateFormatter.localizedString(for: date, relativeTo: Date())
+            return ChatRow.relativeDateFormatter.localizedString(for: date, relativeTo: Date())
         } else {
-             return date.formatted(.dateTime.month(.abbreviated).day())
+            return date.formatted(.dateTime.month(.abbreviated).day())
         }
     }
-
+    
     var body: some View {
         HStack(spacing: 12) {
             // --- Use AsyncImage for Avatar ---
@@ -51,8 +52,21 @@ struct ChatRow: View {
             .frame(width: 50, height: 50)
             .clipShape(Circle())
             .overlay(Circle().stroke(Color.gray.opacity(0.2), lineWidth: 1))
+            
+            // --- ADD Unread Indicator Overlay ---
+            .overlay(alignment: .topTrailing) {
+                if chat.isUnread {
+                    Circle()
+                        .fill(Color.blue)
+                        .frame(width: 12, height: 12)
+                        .overlay(Circle().stroke(Color.white, lineWidth: 1.5)) // Optional white border
+                        .offset(x: 3, y: -3) // Adjust position
+                }
+            }
+            // --- END Unread Indicator ---
+            
             // --- End AsyncImage ---
-
+            
             VStack(alignment: .leading, spacing: 2) { // Adjust spacing
                 HStack {
                     Text(chat.otherParticipant.fullName ?? chat.otherParticipant.username ?? "Unknown User")
@@ -61,6 +75,7 @@ struct ChatRow: View {
                     Text(formatTimestamp(chat.lastMessageTimestamp))
                         .font(.caption) // Make timestamp smaller
                         .foregroundColor(.gray)
+                        .fontWeight(chat.isUnread ? .semibold : .regular)
                 }
                 // Add Request Title if available
                 if let requestTitle = chat.requestTitle {
@@ -69,35 +84,45 @@ struct ChatRow: View {
                         .foregroundColor(.blue) // Use a distinct color
                         .lineLimit(1)
                 }
-                // Last Message Content
-                Text(chat.lastMessageContent ?? (chat.requestTitle == nil ? "No messages yet" : "Chat started")) // Adjust placeholder
-                    .font(.subheadline)
-                    .foregroundColor(.gray)
-                    .lineLimit(1)
-            }
-            // --- END MODIFY Middle Content ---
-            Spacer()
-            
-            // --- ADD Request Image (Conditional) ---
-            // Only show if requestImageUrl exists and is not empty
-            if let imageUrl = chat.requestImageUrl, !imageUrl.isEmpty {
-                AsyncImage(url: URL(string: imageUrl)) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().aspectRatio(contentMode: .fill)
-                    case .empty, .failure:
-                        EmptyView() // Don't show placeholder if image fails/missing
-                    @unknown default:
-                        EmptyView()
+                // --- MODIFY Last Message Content ---
+                HStack(spacing: 4) { // Use HStack for "You:" prefix
+                    // Add "You:" prefix if current user sent the last message
+                    if chat.lastMessageSenderId == currentUserId {
+                        Text("You:")
+                            .font(.subheadline)
+                            .foregroundColor(.gray) // Match color
+                            .fontWeight(.medium) // Make it slightly bolder
                     }
+                    Text(chat.lastMessageContent ?? (chat.requestTitle == nil ? "No messages yet" : "Chat started"))
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
+                        .lineLimit(1)
                 }
-                .frame(width: 45, height: 45) // Adjust size as needed
-                .clipped()
-                .cornerRadius(6)
+                .fontWeight(chat.isUnread ? .medium : .regular)
+                // --- END MODIFY Last Message ---
+                Spacer()
+                
+                // --- ADD Request Image (Conditional) ---
+                // Only show if requestImageUrl exists and is not empty
+                if let imageUrl = chat.requestImageUrl, !imageUrl.isEmpty {
+                    AsyncImage(url: URL(string: imageUrl)) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image.resizable().aspectRatio(contentMode: .fill)
+                        case .empty, .failure:
+                            EmptyView() // Don't show placeholder if image fails/missing
+                        @unknown default:
+                            EmptyView()
+                        }
+                    }
+                    .frame(width: 45, height: 45) // Adjust size as needed
+                    .clipped()
+                    .cornerRadius(6)
+                }
+                // --- END ADD Request Image ---
             }
-            // --- END ADD Request Image ---
+            .padding(.vertical, 8)
         }
-        .padding(.vertical, 8)
     }
 }
 
@@ -110,6 +135,7 @@ struct ChatView: View { // Brace 1 Open
     @State private var chats: [Chat] = []
     @State private var isLoading = false
     @State private var errorMessage: String?
+    @State private var currentUserId: UUID?
 
     // Filtered chats (simplified)
     var filteredChats: [Chat] {
@@ -169,7 +195,7 @@ struct ChatView: View { // Brace 1 Open
                     ForEach(chats) { chat in
                         // Wrap ChatRow in NavigationLink to ChatDetailView
                         NavigationLink(destination: ChatDetailView(chat: chat)) {
-                             ChatRow(chat: chat) // Your existing ChatRow view
+                            ChatRow(chat: chat, currentUserId: currentUserId) // Your existing ChatRow view
                         }
                     }
                 } // End List
@@ -183,9 +209,25 @@ struct ChatView: View { // Brace 1 Open
         } // End VStack
         .navigationTitle("Chats")
         .task { // Fetch chats when the view appears
+            await fetchCurrentUserId()
             await fetchChats()
         }
     } // Brace 2 Close
+
+    // --- ADD fetchCurrentUserId ---
+    // (Similar to the one in RequestDetailView, could be moved to a shared ViewModel)
+    @MainActor
+    func fetchCurrentUserId() async {
+        guard isViewAuthenticated else { return }
+        guard currentUserId == nil else { return } // Fetch only once
+        do {
+            currentUserId = try await supabase.auth.session.user.id
+        } catch {
+            print("❌ ChatView: Error fetching current user ID: \(error)")
+            errorMessage = "Could not identify current user." // Show error
+        }
+    }
+    // --- END fetchCurrentUserId ---
 
     // --- Updated fetchChats Function ---
     @MainActor
@@ -198,21 +240,37 @@ struct ChatView: View { // Brace 1 Open
             self.chats = []
             return
         }
-        // --- END MODIFICATION ---
+        // --- Ensure currentUserId is available ---
+        guard let currentUserId = self.currentUserId else {
+            print("❌ ChatView fetchChats: Current user ID not available. Fetching...")
+            // Attempt to fetch if missing, then retry fetchChats or return
+            await fetchCurrentUserId()
+            // Re-check after attempting fetch
+            if self.currentUserId == nil {
+                self.errorMessage = "Could not verify user to fetch chats."
+                return
+            }
+            // If fetch succeeded, use the newly fetched ID for this run
+            // This recursive call is okay here as it's guarded by isLoading
+            // await fetchChats() // Or just proceed with the fetched ID
+            // Let's proceed:
+            guard let fetchedUserId = self.currentUserId else { return } // Final check
+            await fetchChatsInternal(currentUserId: fetchedUserId) // Call internal func
+            return // Exit outer function
+        }
+        // --- END Ensure currentUserId ---
+        await fetchChatsInternal(currentUserId: currentUserId)
+    }
 
-        // Remove the explicit `try await supabase.auth.session` check here,
-        // as we now rely on the environment value passed down from AppView.
-
-        guard !isLoading else { /* ... */ return }
-
+    // --- Internal fetch function requiring userId ---
+    @MainActor
+    private func fetchChatsInternal(currentUserId: UUID) async {
+        guard !isLoading else { return }
         isLoading = true
         errorMessage = nil
-        print("ChatView fetchChats: Starting fetch...")
+        print("ChatView fetchChatsInternal: Starting fetch...")
 
         do { // Brace 12 Open
-            // 1. Get current user ID
-            let currentUserId = try await supabase.auth.session.user.id
-
             struct BasicChatInfoWithRequest: Decodable, Identifiable {
                 let id: Int
                 let requestId: Int?
@@ -263,26 +321,76 @@ struct ChatView: View { // Brace 1 Open
             let profilesById = Dictionary(uniqueKeysWithValues: profiles.map { ($0.id, $0) })
 
             // Query 3: Fetch latest messages
-            struct LatestMessage: Decodable { let chatId: Int; let content: String; let createdAt: Date; enum CodingKeys: String, CodingKey { case chatId = "chat_id"; case content; case createdAt = "created_at" } }
-            let allMessagesForChats: [LatestMessage] = try await supabase.from("messages").select("chat_id, content, created_at").in("chat_id", value: chatIds).order("created_at", ascending: false).execute().value
-
+            struct LatestMessage: Decodable {
+                let chatId: Int
+                let content: String
+                let createdAt: Date
+                let senderId: UUID // <-- ADD senderId
+                enum CodingKeys: String, CodingKey {
+                    case chatId = "chat_id"
+                    case content
+                    case createdAt = "created_at"
+                    case senderId = "sender_id" // <-- ADD mapping
+                }
+            }
+            // Select sender_id
+            let allMessagesForChats: [LatestMessage] = try await supabase
+                .from("messages")
+                .select("chat_id, content, created_at, sender_id") // <-- SELECT sender_id
+                .in("chat_id", value: chatIds)
+                .order("created_at", ascending: false)
+                .execute()
+                .value
+            // --- END MODIFY Query 3 ---
+            
             // Process latest messages client-side
             var latestMessageByChatId: [Int: LatestMessage] = [:]
             for message in allMessagesForChats { if latestMessageByChatId[message.chatId] == nil { latestMessageByChatId[message.chatId] = message } }
 
+            // --- ADD Query 4: Fetch Read Statuses ---
+            struct ReadStatus: Decodable {
+                let chatId: Int
+                let lastReadAt: Date? // Nullable if never read
+                enum CodingKeys: String, CodingKey {
+                    case chatId = "chat_id"
+                    case lastReadAt = "last_read_at"
+                }
+            }
+            let readStatuses: [ReadStatus] = try await supabase
+                .from("chat_read_status")
+                .select("chat_id, last_read_at")
+                .eq("user_id", value: currentUserId) // For the current user
+                .in("chat_id", value: chatIds) // Only for the chats being displayed
+                .execute()
+                .value
+            // Convert to dictionary for easy lookup
+            let lastReadAtByChatId = Dictionary(uniqueKeysWithValues: readStatuses.map { ($0.chatId, $0.lastReadAt) })
+            // --- END Query 4 ---
+            
             // 4. Combine results
             var populatedChats: [Chat] = []
             for basicChat in basicChatsWithRequests { // Brace 13 Open
                 let otherUserId = (basicChat.requesterId == currentUserId) ? basicChat.helperId : basicChat.requesterId
-                guard let otherProfile = profilesById[otherUserId] else {
-                    print("⚠️ Profile not found for user \(otherUserId) in chat \(basicChat.id). Creating placeholder.")
-                    let placeholderProfile = Profile(id: otherUserId, username: "Unknown", fullName: "Unknown User", website: nil, avatarUrl: nil)
-                    let latestMsg = latestMessageByChatId[basicChat.id]
-                    let chat = Chat(id: basicChat.id, requestId: basicChat.requestId, otherParticipant: placeholderProfile, createdAt: basicChat.createdAt, lastMessageContent: latestMsg?.content, lastMessageTimestamp: latestMsg?.createdAt, requestTitle: basicChat.requests?.title, requestImageUrl: basicChat.requests?.imageUrl)
-                    populatedChats.append(chat)
-                    continue
-                }
+                guard let otherProfile = profilesById[otherUserId] else { /* ... placeholder logic ... */ continue }
                 let latestMsg = latestMessageByChatId[basicChat.id]
+                let lastReadTimestamp = lastReadAtByChatId[basicChat.id] ?? nil
+                
+                // --- Calculate isUnread ---
+                var unread = false
+                if let lastMsgTimestamp = latestMsg?.createdAt, latestMsg?.senderId != currentUserId {
+                    // If there's a last message, it wasn't sent by me
+                    if let lastRead = lastReadTimestamp {
+                        // If read status exists, check if message is newer
+                        if lastMsgTimestamp > lastRead {
+                            unread = true
+                        }
+                    } else {
+                        // If no read status exists, the message is definitely unread
+                        unread = true
+                    }
+                }
+                // --- END Calculate isUnread ---
+                
                 let chat = Chat(
                     id: basicChat.id,
                     requestId: basicChat.requestId,
@@ -290,11 +398,13 @@ struct ChatView: View { // Brace 1 Open
                     createdAt: basicChat.createdAt,
                     lastMessageContent: latestMsg?.content,
                     lastMessageTimestamp: latestMsg?.createdAt,
-                    requestTitle: basicChat.requests?.title, // Get from nested struct
-                    requestImageUrl: basicChat.requests?.imageUrl // Get from nested struct
+                    requestTitle: basicChat.requests?.title,
+                    requestImageUrl: basicChat.requests?.imageUrl,
+                    lastMessageSenderId: latestMsg?.senderId,
+                    isUnread: unread
                 )
                 populatedChats.append(chat)
-            } // Brace 13 Close
+            }
 
             // Sort final list
             self.chats = populatedChats.sorted { ($0.lastMessageTimestamp ?? $0.createdAt) > ($1.lastMessageTimestamp ?? $1.createdAt) }
