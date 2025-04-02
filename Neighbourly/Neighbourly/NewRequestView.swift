@@ -3,196 +3,456 @@
 import SwiftUI
 import Supabase
 import CoreLocation
-import PhotosUI // <-- Import PhotosUI
+import PhotosUI
+import MapKit // <-- Import MapKit
 
-struct NewRequestView: View { // Brace 1 Open
+// --- CLASS DEFINITION HERE (OUTSIDE THE STRUCT) ---
+// This class acts as the delegate for MKLocalSearchCompleter
+// and publishes the results for SwiftUI views.
+class LocationSearchCompleterDelegate: NSObject, ObservableObject, MKLocalSearchCompleterDelegate {
+
+    @Published var completions: [MKLocalSearchCompletion] = [] // Suggestions
+    @Published var error: Error? = nil // To report errors
+
+    private var completer: MKLocalSearchCompleter
+
+    override init() {
+        completer = MKLocalSearchCompleter()
+        super.init()
+        completer.delegate = self
+        // Optional: Filter results (e.g., only addresses)
+        // completer.resultTypes = .address
+        // Optional: Limit search region (e.g., to user's current region)
+        // if let region = LocationManager.shared.userRegion { // Assuming you have a way to get region
+        //     completer.region = region
+        // }
+    }
+
+    // Public property to trigger searches
+    var searchQuery: String = "" {
+        didSet {
+            error = nil // Clear previous errors
+            // Prevent searching for empty string which can sometimes cause issues
+            guard !searchQuery.isEmpty else {
+                self.completions = []
+                return
+            }
+            print("➡️ Completer searching for: '\(searchQuery)'") // Debug Log
+            completer.queryFragment = searchQuery
+        }
+    }
+
+    // MARK: - MKLocalSearchCompleterDelegate Methods
+
+    func completerDidUpdateResults(_ completer: MKLocalSearchCompleter) {
+        // Filter out results without titles (can sometimes happen)
+        self.completions = completer.results.filter { !$0.title.isEmpty }
+        self.error = nil // Clear error on success
+        print("⬅️ Completer found \(self.completions.count) results.") // Debug Log
+    }
+
+    func completer(_ completer: MKLocalSearchCompleter, didFailWithError error: Error) {
+        self.error = error
+        self.completions = [] // Clear results on error
+        print("❌ Completer failed with error: \(error.localizedDescription)") // Debug Log
+    }
+}
+// --- END CLASS DEFINITION ---
+
+// --- PreferenceKey definition (outside the struct) ---
+struct TextFieldFramePreferenceKey: PreferenceKey {
+    static var defaultValue: CGRect = .zero // Default value
+
+    // Combine values if multiple views report a preference
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        // Use the frame reported by the text field
+        value = nextValue()
+    }
+}
+
+
+// --- STRUCT DEFINITION STARTS HERE ---
+struct NewRequestView: View {
     // Form fields
     @State private var title: String = ""
     @State private var description: String = ""
     @State private var selectedCategory: String = ""
     @State private var date: Date = Date()
-    @State private var location: String = "" // Address string
 
-    // --- Image Picker State ---
+    // --- Location State ---
+    @State private var locationQuery: String = "" // What the user types
+    @StateObject private var completerDelegate = LocationSearchCompleterDelegate() // Handles suggestions
+    @State private var selectedCompletion: MKLocalSearchCompletion? = nil // Store the chosen suggestion
+    @State private var selectedCoordinate: CLLocationCoordinate2D? = nil // Store the final coordinate (MUST BE OPTIONAL '?')
+    @State private var isSearchingCoordinates = false // Loading indicator for MKLocalSearch
+    @State private var locationErrorMessage: String? = nil // Specific error for location search
+    @State private var showSuggestions: Bool = false // Controls overlay visibility
+    @State private var textFieldFrame: CGRect = .zero // Stores measured frame of TextField
+    // --- End Location State ---
+
+    // Image Picker State
     @State private var selectedPhotoItem: PhotosPickerItem? = nil
     @State private var selectedImageData: Data? = nil
-    @State private var selectedImagePreview: Image? = nil // Optional Image
-    // --- End Image Picker State ---
+    @State private var selectedImagePreview: Image? = nil
 
-    // State for Supabase interaction
-    @State private var isLoading = false
-    @State private var isGeocoding = false
+    // General State
+    @State private var isLoading = false // For the final posting step
     @State private var isUploading = false
-    @State private var errorMessage: String?
+    @State private var errorMessage: String? // General errors
     @State private var successMessage: String?
 
-    // Geocoder instance
-    private let geocoder = CLGeocoder()
-
-    // Hardcoded categories
     let categories = ["Moving Help", "Tech", "Groceries", "Pet Care", "Home Repair", "Other"]
+    let formCoordinateSpace = "formCoordinateSpace" // Name for coordinate space
 
+    // Initialize category selection
     init() {
         _selectedCategory = State(initialValue: categories.first ?? "")
     }
 
-    var body: some View { // Brace 2 Open
-        NavigationView { // Brace 3 Open
-            VStack { // Brace 4 Open
-                Form { // Brace 5 Open
-                    Section(header: Text("Request Details")) { // Brace 6 Open
-                        TextField("Title (Required)", text: $title)
+    var body: some View {
+        NavigationView {
+            // Use GeometryReader to provide size context for fallback positioning
+            GeometryReader { geometry in
+                VStack(spacing: 0) {
+                    Form {
+                        Section(header: Text("Request Details")) {
+                            TextField("Title (Required)", text: $title)
 
-                        VStack(alignment: .leading) { // Brace 7 Open
-                            Text("Description")
-                                .font(.caption).foregroundColor(.gray)
-                            TextEditor(text: $description)
-                                .frame(height: 100)
-                                .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color.gray.opacity(0.2)))
-                        } // Brace 7 Close
+                            VStack(alignment: .leading) {
+                                Text("Description")
+                                    .font(.caption).foregroundColor(.gray)
+                                TextEditor(text: $description)
+                                    .frame(height: 100)
+                                    .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color(UIColor.systemGray4)))
+                            }
 
-                        Picker("Category", selection: $selectedCategory) { // Brace 8 Open
-                            ForEach(categories, id: \.self) { category in // Brace 9 Open
-                                Text(category)
-                            } // Brace 9 Close
-                        } // Brace 8 Close
-
-                        DatePicker("Complete By", selection: $date, displayedComponents: [.date, .hourAndMinute])
-
-                        TextField("Location Address/Area", text: $location)
-                    } // Brace 6 Close
-
-                    // --- Updated Image Section ---
-                    Section(header: Text("Image (Optional)")) { // Brace 10 Open
-                        if let imagePreview = selectedImagePreview {
-                            imagePreview
-                                .resizable()
-                                .scaledToFit()
-                                .frame(maxHeight: 200)
-                                .cornerRadius(8)
-                                .overlay(alignment: .topTrailing) {
-                                    Button {
-                                        self.selectedPhotoItem = nil
-                                        self.selectedImageData = nil
-                                        self.selectedImagePreview = nil
-                                    } label: {
-                                        Image(systemName: "xmark.circle.fill")
-                                            .foregroundColor(.gray)
-                                            .background(Circle().fill(.white.opacity(0.8)))
-                                            .padding(4)
-                                    }
+                            Picker("Category", selection: $selectedCategory) {
+                                ForEach(categories, id: \.self) { category in
+                                    Text(category)
                                 }
-                        }
+                            }
 
-                        PhotosPicker(
-                            selection: $selectedPhotoItem,
-                            matching: .images,
-                            photoLibrary: .shared()
-                        ) {
-                            Label(selectedImagePreview == nil ? "Add Image" : "Change Image", systemImage: "photo")
-                        }
-                        .onChange(of: selectedPhotoItem) { newItem in
-                            Task {
-                                if let data = try? await newItem?.loadTransferable(type: Data.self) {
-                                    self.selectedImageData = data
-                                    if let uiImage = UIImage(data: data) {
-                                        self.selectedImagePreview = Image(uiImage: uiImage)
-                                    } else {
-                                        self.selectedImagePreview = nil
+                            DatePicker("Complete By", selection: $date, displayedComponents: [.date, .hourAndMinute])
+
+                            // --- Location Input Section ---
+                            VStack(alignment: .leading) {
+                                Text("Location")
+                                    .font(.caption).foregroundColor(.gray)
+
+                                // Search Field - Measure its frame
+                                TextField("Search address or place", text: $locationQuery)
+                                    .background(
+                                        GeometryReader { proxy in
+                                            Color.clear
+                                                .preference(
+                                                    key: TextFieldFramePreferenceKey.self,
+                                                    value: proxy.frame(in: .named(formCoordinateSpace))
+                                                )
+                                        }
+                                    )
+                                    .onChange(of: locationQuery) { newValue in
+                                        print("✏️ locationQuery changed: '\(newValue)'") // Debug Log
+                                        completerDelegate.searchQuery = newValue
+                                        if selectedCompletion != nil {
+                                            selectedCompletion = nil
+                                            selectedCoordinate = nil
+                                            locationErrorMessage = nil
+                                        }
+                                        // Update showSuggestions state
+                                        let shouldShow = !newValue.isEmpty && !isSearchingCoordinates
+                                        print("ℹ️ Setting showSuggestions to: \(shouldShow)") // Debug Log
+                                        // Use animation to make state change smoother if needed
+                                        withAnimation(.easeInOut(duration: 0.1)) {
+                                            showSuggestions = shouldShow
+                                        }
                                     }
-                                } else {
+
+                                // Show loading/error indicators
+                                if isSearchingCoordinates {
+                                    ProgressView("Getting coordinates...")
+                                        .padding(.top, 5)
+                                } else if let locError = locationErrorMessage {
+                                    Text(locError)
+                                        .font(.caption)
+                                        .foregroundColor(.red)
+                                        .padding(.top, 5)
+                                }
+                                // Display completer error directly if suggestions are hidden but error exists
+                                else if let completerError = completerDelegate.error, !showSuggestions, !locationQuery.isEmpty {
+                                    Text("Search Error: \(completerError.localizedDescription)")
+                                        .font(.caption)
+                                        .foregroundColor(.orange)
+                                        .padding(.top, 5)
+                                }
+                            } // End Location VStack
+                            // --- End Location Input Section ---
+
+                        } // End Request Details Section
+
+                        // Image Section
+                        Section(header: Text("Image (Optional)")) {
+                            if let imagePreview = selectedImagePreview {
+                                imagePreview
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(maxHeight: 200)
+                                    .cornerRadius(8)
+                                    .overlay(alignment: .topTrailing) {
+                                        Button {
+                                            self.selectedPhotoItem = nil
+                                            self.selectedImageData = nil
+                                            self.selectedImagePreview = nil
+                                        } label: {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .foregroundColor(.gray)
+                                                .background(Circle().fill(.white.opacity(0.8)))
+                                                .padding(4)
+                                        }
+                                    }
+                            }
+
+                            PhotosPicker(
+                                selection: $selectedPhotoItem,
+                                matching: .images,
+                                photoLibrary: .shared()
+                            ) {
+                                Label(selectedImagePreview == nil ? "Add Image" : "Change Image", systemImage: "photo")
+                            }
+                            .onChange(of: selectedPhotoItem) { newItem in
+                                Task {
                                     self.selectedImageData = nil
                                     self.selectedImagePreview = nil
+                                    if let data = try? await newItem?.loadTransferable(type: Data.self) {
+                                        self.selectedImageData = data
+                                        if let uiImage = UIImage(data: data) {
+                                            self.selectedImagePreview = Image(uiImage: uiImage)
+                                        }
+                                    }
                                 }
                             }
-                        }
-                    } // Brace 10 Close
-                    // --- End Updated Image Section ---
+                        } // End Image Section
 
-                    // Display messages
-                    if let successMessage { // Brace 12 Open
+                        // Display messages (Success/General Error)
+                        if let successMessage {
+                            Section { Text(successMessage).foregroundColor(.green) }
+                        }
+                        if let errorMessage {
+                            Section { Text(errorMessage).foregroundColor(.red) }
+                        }
+
+                        // Action Buttons Section
                         Section {
-                           Text(successMessage)
-                                .foregroundColor(.green)
-                        }
-                    } // Brace 12 Close
-                    if let errorMessage { // Brace 13 Open
-                         Section {
-                            Text(errorMessage)
-                                .foregroundColor(.red)
-                         }
-                    } // Brace 13 Close
-
-                    // Action Buttons Section
-                    Section { // Brace 14 Open
-                        HStack(spacing: 20) { // Brace 15 Open
-                            Button("Clear Form", role: .destructive) { // Brace 16 Open
-                                clearForm()
-                            } // Brace 16 Close
-                            .disabled(isLoading || isGeocoding || isUploading)
-
-                            Spacer()
-
-                            Button { // Brace 17 Open
-                                Task { // Brace 18 Open
-                                    await postRequest()
-                                } // Brace 18 Close
-                            } label: { // Brace 17 Close
-                                if isLoading || isGeocoding || isUploading {
-                                    ProgressView()
-                                        .frame(maxWidth: .infinity, alignment: .center)
-                                } else {
-                                    Text("Post Request")
-                                        .frame(maxWidth: .infinity, alignment: .center)
+                            HStack(spacing: 20) {
+                                Button("Clear Form", role: .destructive) {
+                                    clearForm()
                                 }
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .disabled(isLoading || isGeocoding || isUploading || title.trimmingCharacters(in: .whitespaces).isEmpty)
+                                .disabled(isLoading || isUploading || isSearchingCoordinates)
 
-                        } // Brace 15 Close
-                    } // Brace 14 Close
-                } // Brace 5 Close
-            } // Brace 4 Close
+                                Spacer()
+
+                                Button {
+                                    Task {
+                                        await postRequest()
+                                    }
+                                } label: {
+                                    if isLoading || isUploading {
+                                        ProgressView()
+                                            .frame(maxWidth: .infinity, alignment: .center)
+                                    } else {
+                                        Text("Post Request")
+                                            .frame(maxWidth: .infinity, alignment: .center)
+                                    }
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .disabled(
+                                    isLoading || isUploading || isSearchingCoordinates ||
+                                    title.trimmingCharacters(in: .whitespaces).isEmpty ||
+                                    (!locationQuery.isEmpty && selectedCoordinate == nil)
+                                )
+                            }
+                        } // End Action Buttons Section
+                    } // End Form
+                    .coordinateSpace(name: formCoordinateSpace) // Define Coordinate Space for the Form
+                    .scrollDismissesKeyboard(.interactively)
+                    // Listen for preference changes to update the text field frame
+                    .onPreferenceChange(TextFieldFramePreferenceKey.self) { frame in
+                        // Only update if the frame actually changed significantly
+                        if frame != .zero && frame != self.textFieldFrame {
+                             print("📏 TextField Frame Updated: \(frame)") // Debug Log
+                             self.textFieldFrame = frame
+                        }
+                    }
+                    // Add background tap gesture to dismiss suggestions overlay
+                    .background(
+                         Color.clear
+                             .contentShape(Rectangle()) // Make the whole area tappable
+                             .onTapGesture {
+                                 print("🖱️ Background Tapped - Hiding suggestions & keyboard") // Debug Log
+                                 showSuggestions = false
+                                 hideKeyboard()
+                             }
+                     )
+
+                } // End VStack containing Form
+                // --- Suggestions Overlay ---
+                .overlay(alignment: .topLeading) { // Align overlay to top-leading corner
+                    // Show overlay only when needed
+                    if showSuggestions && !completerDelegate.completions.isEmpty && !isSearchingCoordinates && selectedCompletion == nil {
+                        // Use the measured frame for positioning, even if it's zero initially
+                        List {
+                            // Show completer error within the list as well
+                            if let completerError = completerDelegate.error {
+                                 Text("Search Error: \(completerError.localizedDescription)")
+                                     .font(.caption)
+                                     .foregroundColor(.orange)
+                             }
+                            ForEach(completerDelegate.completions, id: \.self) { completion in
+                                Button {
+                                    Task {
+                                        print("👆 Suggestion Tapped: \(completion.title)") // Debug Log
+                                        showSuggestions = false // Hide immediately
+                                        await handleCompletionSelected(completion)
+                                    }
+                                } label: {
+                                    VStack(alignment: .leading) {
+                                        Text(completion.title).font(.subheadline)
+                                        Text(completion.subtitle).font(.caption).foregroundColor(.gray)
+                                    }
+                                }
+                                .buttonStyle(.plain) // Use plain style for buttons in List
+                            }
+                        }
+                        .listStyle(.plain)
+                        .background(.thinMaterial) // Use material background for overlay
+                        .cornerRadius(8)
+                        .shadow(radius: 5)
+                        .frame(maxHeight: 250) // Limit overlay height
+                        // Position using measured frame (defaults gracefully if frame is zero)
+                        .frame(width: textFieldFrame == .zero ? geometry.size.width * 0.9 : textFieldFrame.width) // Use fallback width if frame is zero
+                        .offset(
+                            x: textFieldFrame == .zero ? geometry.size.width * 0.05 : textFieldFrame.minX, // Use fallback x if frame is zero
+                            y: textFieldFrame == .zero ? 100 : textFieldFrame.maxY + 20 // Use fallback y if frame is zero (adjust fallback Y if needed)
+                        )
+                        .offset(
+                                                x: textFieldFrame.minX,
+                                                y: textFieldFrame.maxY - 10 // Use a noticeable padding like + 15
+                                            )
+                        .transition(.opacity.combined(with: .move(edge: .top))) // Add transition
+                        .animation(.easeInOut(duration: 0.2), value: showSuggestions) // Animate appearance
+                        .onAppear { print("✅ Overlay Appeared") } // Debug Log
+                        .onDisappear { print("❌ Overlay Disappeared") } // Debug Log
+                    }
+                }
+                // --- End Suggestions Overlay ---
+            } // End GeometryReader
             .navigationTitle("New Request")
             .navigationBarTitleDisplayMode(.inline)
-        } // Brace 3 Close
-    } // Brace 2 Close
+            .onDisappear {
+                // Clear search when view disappears
+                completerDelegate.searchQuery = ""
+            }
+        } // End NavigationView
+    } // End body
+
+    // --- Function to handle suggestion selection ---
+    @MainActor
+    func handleCompletionSelected(_ completion: MKLocalSearchCompletion) async {
+        locationQuery = completion.title // Keep the selected text
+        selectedCompletion = completion // Store the selected item
+        // showSuggestions = false // Already set to false when button tapped
+        completerDelegate.completions = [] // Clear suggestions list immediately
+        isSearchingCoordinates = true // Show loading indicator
+        locationErrorMessage = nil // Clear previous errors
+        hideKeyboard() // Dismiss keyboard after selection
+
+        // Perform MKLocalSearch to get coordinates
+        let searchRequest = MKLocalSearch.Request(completion: completion)
+        let search = MKLocalSearch(request: searchRequest)
+
+        do {
+            let response = try await search.start()
+            if let mapItem = response.mapItems.first, let coordinate = mapItem.placemark.location?.coordinate {
+                self.selectedCoordinate = coordinate
+                print("✅ Coordinate found for '\(completion.title)': \(coordinate.latitude), \(coordinate.longitude)")
+                // --- DO NOT OVERWRITE locationQuery here ---
+            } else {
+                print("⚠️ MKLocalSearch succeeded but no coordinate found for '\(completion.title)'")
+                locationErrorMessage = "Could not get specific coordinates for this selection."
+                selectedCoordinate = nil // Ensure coordinate is nil
+                selectedCompletion = nil // Allow user to search again
+            }
+        } catch {
+            print("❌ MKLocalSearch failed for '\(completion.title)': \(error.localizedDescription)")
+            locationErrorMessage = "Failed to get coordinates. Please try again or choose another location."
+            selectedCoordinate = nil // Ensure coordinate is nil
+            selectedCompletion = nil // Allow user to search again
+        }
+        isSearchingCoordinates = false // Hide loading indicator
+    }
+    // --- END Function ---
 
     // Function to clear the form fields and messages
-    func clearForm() { // Brace 21 Open
+    func clearForm() {
         title = ""
         description = ""
         selectedCategory = categories.first ?? ""
         date = Date()
-        location = ""
+        // --- Clear location state ---
+        locationQuery = ""
+        selectedCompletion = nil
+        selectedCoordinate = nil
+        completerDelegate.searchQuery = "" // Clear completer query too
+        completerDelegate.completions = []
+        locationErrorMessage = nil
+        showSuggestions = false // Reset overlay state
+        textFieldFrame = .zero // Reset measured frame
+        // --- End clear location state ---
         selectedPhotoItem = nil
         selectedImageData = nil
         selectedImagePreview = nil
         errorMessage = nil
         successMessage = nil
-    } // Brace 21 Close
+        isLoading = false
+        isUploading = false
+        isSearchingCoordinates = false
+    }
 
-    // Function to post the request to Supabase
+    // Function to post the request to Supabase (REVISED)
     @MainActor
-    func postRequest() async { // Brace 22 Open
+    func postRequest() async {
+        hideKeyboard() // Dismiss keyboard before starting
+
+        // Basic validation
         guard !title.trimmingCharacters(in: .whitespaces).isEmpty else {
             errorMessage = "Title cannot be empty."
             successMessage = nil
             return
         }
-        guard !isLoading, !isGeocoding, !isUploading else { return }
+        // Check if location is entered but coordinates haven't been resolved yet
+        guard locationQuery.isEmpty || selectedCoordinate != nil else {
+             errorMessage = "Please select a location from the suggestions or clear the location field."
+             successMessage = nil
+             return
+        }
+        guard !isLoading, !isUploading, !isSearchingCoordinates else { return }
 
-        isLoading = true
-        isGeocoding = false
+        isLoading = true // General loading for posting process
         isUploading = false
         errorMessage = nil
         successMessage = nil
+        locationErrorMessage = nil // Clear location error too
 
+        // --- GeoPoint is now derived from selectedCoordinate ---
         var geoPoint: GeoJSONPoint? = nil
+        if let coordinate = selectedCoordinate {
+            geoPoint = GeoJSONPoint(coordinate: coordinate)
+        }
+        // --- End GeoPoint derivation ---
+
         var uploadedImageUrl: String? = nil
         var currentUserId: UUID? = nil
 
-        // --- Get User ID First ---
+        // Get User ID
         do {
              currentUserId = try await supabase.auth.session.user.id
         } catch {
@@ -208,96 +468,73 @@ struct NewRequestView: View { // Brace 1 Open
         }
         let userIdString = userId.uuidString
 
-
-        // --- Geocoding Step ---
-        let addressString = location.trimmingCharacters(in: .whitespaces)
-        if !addressString.isEmpty { // Brace 23 Open
-            isGeocoding = true
-            isLoading = false
-            print("Geocoding address: \(addressString)")
-            do { // Brace 24 Open
-                let placemarks = try await geocoder.geocodeAddressString(addressString)
-                if let coordinate = placemarks.first?.location?.coordinate { // Brace 25 Open
-                    geoPoint = GeoJSONPoint(coordinate: coordinate)
-                    print("Geocoding successful: \(coordinate.latitude), \(coordinate.longitude)")
-                } else { // Brace 25 Close, Brace 26 Open
-                    print("Geocoding warning: Address found but no coordinates.")
-                } // Brace 26 Close
-            } catch { // Brace 24 Close, Brace 27 Open
-                print("Geocoding error: \(error.localizedDescription)")
-                errorMessage = "Could not find coordinates for location. Posting without map location."
-            } // Brace 27 Close
-            isGeocoding = false
-        } // Brace 23 Close
-
-        // --- Image Upload Step ---
-        if let imageData = selectedImageData { // Brace 28 Open
+        // Image Upload Step
+        if let imageData = selectedImageData {
             isUploading = true
-            isLoading = false
-
+            isLoading = false // Switch indicator type
             let uniqueFileName = "\(Int(Date().timeIntervalSince1970))_\(UUID().uuidString).jpg"
             let filePath = "\(userIdString)/\(uniqueFileName)"
-
             print("Uploading image to: \(filePath)")
-
-            do { // Brace 31 Open (Upload do-catch)
-                _ = try await supabase.storage
-                    .from("request_images")
-                    .upload(path: filePath, file: imageData, options: FileOptions(contentType: "image/jpeg"))
-
-                // ****** FIX: Add try ******
-                let response = try supabase.storage
-                    .from("request_images")
-                    .getPublicURL(path: filePath)
-                // ****** END FIX ******
-
+            do {
+                _ = try await supabase.storage.from("request_images").upload(path: filePath, file: imageData, options: FileOptions(contentType: "image/jpeg"))
+                let response = try supabase.storage.from("request_images").getPublicURL(path: filePath)
                 uploadedImageUrl = response.absoluteString
                 print("Image upload successful. URL: \(uploadedImageUrl ?? "N/A")")
-
-            } catch { // Brace 31 Close, Brace 32 Open
+            } catch {
                 print("❌ Image upload error: \(error)")
                 let currentError = errorMessage ?? ""
                 errorMessage = "\(currentError)\nFailed to upload image: \(error.localizedDescription)".trimmingCharacters(in: .whitespacesAndNewlines)
-            } // Brace 32 Close
+                // Decide if you want to stop here if image upload fails
+                // isLoading = false; isUploading = false; return
+            }
             isUploading = false
-        } // Brace 28 Close
+            isLoading = true // Switch back to general indicator
+        }
 
-        // --- Supabase Insert Step ---
-        isLoading = true
+        // Supabase Insert Step
+        do {
+            let finalLocationText = locationQuery.trimmingCharacters(in: .whitespaces)
 
-        do { // Brace 33 Open (Supabase do-catch)
-            // Use the already fetched userId
             let newRequest = RequestParams(
-                userId: userId, // Use fetched userId
+                userId: userId,
                 title: title.trimmingCharacters(in: .whitespaces),
                 description: description.trimmingCharacters(in: .whitespaces).isEmpty ? nil : description.trimmingCharacters(in: .whitespaces),
                 category: selectedCategory.isEmpty ? nil : selectedCategory,
                 completeBy: date,
-                locationText: addressString.isEmpty ? nil : addressString,
-                locationGeo: geoPoint,
+                locationText: finalLocationText.isEmpty ? nil : finalLocationText,
+                locationGeo: geoPoint, // Use the coordinate derived from MKLocalSearch
                 imageUrl: uploadedImageUrl
+                // status defaults to "open" in RequestParams
             )
 
-            try await supabase
-                .from("requests")
-                .insert(newRequest, returning: .minimal)
-                .execute()
+            try await supabase.from("requests").insert(newRequest, returning: .minimal).execute()
 
             print("Request successfully posted!")
             successMessage = "Request posted successfully!"
-            clearForm()
+            clearForm() // Clear form on success
 
-        } catch { // Brace 33 Close, Brace 34 Open
+        } catch {
             print("❌ Error posting request: \(error)")
             let currentError = errorMessage ?? ""
             errorMessage = "\(currentError)\nFailed to post request: \(error.localizedDescription)".trimmingCharacters(in: .whitespacesAndNewlines)
-        } // Brace 34 Close
+        }
 
         isLoading = false
-    } // Brace 22 Close
+        isUploading = false // Ensure reset
+    }
+}
+// --- END STRUCT DEFINITION ---
 
-} // Brace 1 Close
+// Helper to dismiss keyboard
+#if canImport(UIKit)
+extension View {
+    func hideKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+}
+#endif
 
-#Preview { // Brace 35 Open
+
+#Preview {
     NewRequestView()
-} // Brace 35 Close
+}
