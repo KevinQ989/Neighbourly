@@ -424,55 +424,62 @@ struct HomePageView: View {
 // MARK: - Supporting Views (CategoryDetailView, CategoryView, FullScreenMapView)
 
 // Category Detail View - Updated to use RequestData
-struct CategoryDetailView: View { // Brace 29 Open
+struct CategoryDetailView: View {
     let category: Category
-    // Accept RequestData array
     let requests: [RequestData]
 
     // Filtered requests for the specific category
-    var categoryRequests: [RequestData] { // Brace 30 Open
+    var categoryRequests: [RequestData] {
         requests.filter { $0.category == category.categoryname }
-    } // Brace 30 Close
+    }
 
-    var body: some View { // Brace 31 Open
-        VStack { // Brace 32 Open
+    let columns: [GridItem] = [
+        GridItem(.flexible()),
+        GridItem(.flexible()),
+    ]
+
+    var body: some View {
+        VStack {
             // Header remains the same
-            HStack { // Brace 33 Open
-                // Use placeholder for category image if needed
-                Image(systemName: "tag.fill") // Placeholder
+            HStack {
+                Image(systemName: "tag.fill")  // Placeholder
                     .resizable()
                     .scaledToFit()
                     .frame(width: 50, height: 50)
                     .foregroundColor(Color(category.color))
-                    // .clipShape(Circle()) // Keep if using actual images
+                    .clipShape(Circle())  // Keep if using actual images
 
                 Text(category.categoryname)
-                    .font(.title).fontWeight(.bold)
+                    .font(.title)
+                    .fontWeight(.bold)
+
                 Spacer()
-            } // Brace 33 Close
+            }
             .padding()
             .background(Color(category.color).opacity(0.1))
 
             // List of requests for this category
-            if categoryRequests.isEmpty { // Brace 34 Open
+            if categoryRequests.isEmpty {
                 Spacer()
                 Text("No requests in this category")
                     .foregroundColor(.gray)
                 Spacer()
-            } else { // Brace 34 Close, Brace 35 Open
-                List(categoryRequests) { request in // Brace 36 Open
-                    // Use RequestCard or a custom row for this list
-                    RequestCard(request: request) // Example: Reuse RequestCard
-                        .padding(.vertical, 4)
-                } // Brace 36 Close
-            } // Brace 35 Close
-        } // Brace 32 Close
-        // Remove redundant navigation title if using the one from NavigationLink
-        // .navigationTitle(category.name)
-        // Ensure back button is shown (should be default)
-        // .navigationBarBackButtonHidden(false)
-    } // Brace 31 Close
-} // Brace 29 Close
+            } else {
+                ScrollView {  //Wrap LazyVGrid inside ScrollView
+                    LazyVGrid(columns: columns, spacing: 16) {
+                        ForEach(categoryRequests) { request in
+                            NavigationLink(destination: RequestDetailView(request: request)) {
+                                RequestCard(request: request)  // Reuse RequestCard
+                                    .padding(8)  // Add padding around each card
+                            }
+                        }
+                    }
+                    .padding()  // Add padding to the grid itself
+                }
+            }
+        }
+    }
+}
 
 // Updated CategoryView to use color (remains the same)
 struct CategoryView: View { // Brace 37 Open
