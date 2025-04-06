@@ -104,4 +104,8 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             isAuthorized = false
         }
     }
+    
+    var equatableUserLocation: EquatableCoordinate {
+            EquatableCoordinate(coordinate: userLocation)
+        }
 }

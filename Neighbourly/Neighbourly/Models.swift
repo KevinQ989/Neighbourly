@@ -100,6 +100,20 @@ struct RequestParams: Encodable {
     }
 }
 
+struct NearbyRequestsParams: Encodable {
+    let user_lon: Double
+    let user_lat: Double
+    let distance_meters: Double
+}
+
+struct RequestAnnotation: Identifiable {
+    let id = UUID()
+    let coordinate: CLLocationCoordinate2D
+    let title: String?
+    let subtitle: String?
+    let request: RequestData
+}
+
 // Struct for DECODING request data FROM Supabase
 struct RequestData: Decodable, Identifiable, Equatable, Hashable { // Add Equatable & Hashable
     let id: Int // Assuming bigint maps to Int
@@ -142,6 +156,14 @@ struct RequestData: Decodable, Identifiable, Equatable, Hashable { // Add Equata
     // Helper to get coordinate for map annotations
     var coordinate: CLLocationCoordinate2D? {
         locationGeo?.coordinate
+    }
+    
+    var latitude: Double? {
+        locationGeo?.coordinate?.latitude
+    }
+
+    var longitude: Double? {
+        locationGeo?.coordinate?.longitude
     }
 }
 

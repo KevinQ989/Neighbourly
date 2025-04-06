@@ -85,13 +85,6 @@ struct RequestCard: View {
 }
 // --- End Request Card View Update ---
 
-// MARK: - RPC Parameter Struct
-struct NearbyRequestsParams: Encodable {
-    let user_lon: Double
-    let user_lat: Double
-    let distance_meters: Double
-}
-
 struct HomeContentView: View {
     var body: some View {
         NavigationView {
@@ -110,11 +103,11 @@ struct HomePageView: View {
         span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
     )
     @State private var hasCenteredMapOnUser = false
-    @StateObject private var locationManager = LocationManager.shared // Use singleton or LocationManager()
-    @State private var nearbyRequests: [RequestData] = [] // All fetched requests
+    @StateObject private var locationManager = LocationManager.shared
+    @State private var nearbyRequests: [RequestData] = []
     @State private var isLoadingRequests = false
     @State private var requestError: String?
-    
+
     @State private var categories: [Category] = []
     @State private var isLoadingCategories = false
     @State private var categoryError: String?
@@ -137,7 +130,9 @@ struct HomePageView: View {
             let lowercasedSearch = searchText.lowercased()
             return nearbyRequests.filter { request in
                 let titleMatch = request.title.lowercased().contains(lowercasedSearch)
-                let descriptionMatch = request.description?.lowercased().contains(lowercasedSearch) ?? false
+                let descriptionMatch = request.description?.lowercased().contains(
+                    lowercasedSearch
+                ) ?? false
                 return titleMatch || descriptionMatch
             }
         }
@@ -145,46 +140,49 @@ struct HomePageView: View {
     // --- End Filtered Requests ---
 
     var body: some View {
-        ZStack { // Brace 1 Open
-            VStack(spacing: 0) { // Brace 2 Open
+        ZStack {
+            VStack(spacing: 0) {
                 // --- Uncommented and Enabled Search Bar ---
-                 HStack {
-                     Image(systemName: "magnifyingglass")
-                         .foregroundColor(.gray)
-                     TextField("Search Requests (Title, Description)", text: $searchText) // Updated placeholder
-                         .font(.system(size: 17))
-                         .autocorrectionDisabled() // Disable autocorrect for search
-                         .textInputAutocapitalization(.never) // Don't capitalize search input
-                     // Add clear button if search text is not empty
-                     if !searchText.isEmpty {
-                         Button {
-                             searchText = "" // Clear the search text
-                         } label: {
-                             Image(systemName: "xmark.circle.fill")
-                                 .foregroundColor(.gray)
-                         }
-                     }
-                 }
-                 .padding(10)
-                 .background(Color(UIColor.systemGray6))
-                 .cornerRadius(10)
-                 .padding(.horizontal)
-                 .padding(.bottom, 5) // Add some padding below search bar
-                 // --- End Search Bar ---
+                HStack {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.gray)
+                    TextField(
+                        "Search Requests (Title, Description)",
+                        text: $searchText
+                    ) // Updated placeholder
+                    .font(.system(size: 17))
+                    .autocorrectionDisabled() // Disable autocorrect for search
+                    .textInputAutocapitalization(.never) // Don't capitalize search input
+                    // Add clear button if search text is not empty
+                    if !searchText.isEmpty {
+                        Button {
+                            searchText = "" // Clear the search text
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.gray)
+                        }
+                    }
+                }
+                .padding(10)
+                .background(Color(UIColor.systemGray6))
+                .cornerRadius(10)
+                .padding(.horizontal)
+                .padding(.bottom, 5) // Add some padding below search bar
+                // --- End Search Bar ---
 
-                ScrollView { // Brace 3 Open
-                    VStack(alignment: .leading, spacing: 20) { // Brace 4 Open
-
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
                         // Categories section
-                        VStack(alignment: .leading) { // Brace 5 Open
-                            HStack { // Brace 6 Open
+                        VStack(alignment: .leading) {
+                            HStack {
                                 Text("Categories")
-                                    .font(.headline).fontWeight(.bold)
+                                    .font(.headline)
+                                    .fontWeight(.bold)
                                 Spacer()
                                 // TODO: Link to a view showing all categories
                                 Image(systemName: "chevron.right")
                                     .foregroundColor(.blue)
-                            } // Brace 6 Close
+                            }
                             .padding(.horizontal)
 
                             if isLoadingCategories {
@@ -203,7 +201,12 @@ struct HomePageView: View {
                                 ScrollView(.horizontal, showsIndicators: false) {
                                     HStack(spacing: 20) {
                                         ForEach(categories) { category in
-                                            NavigationLink(destination: CategoryDetailView(category: category, requests: nearbyRequests)) {
+                                            NavigationLink(
+                                                destination: CategoryDetailView(
+                                                    category: category,
+                                                    requests: nearbyRequests
+                                                )
+                                            ) {
                                                 CategoryView(category: category)
                                             }
                                         }
@@ -212,55 +215,61 @@ struct HomePageView: View {
                                     .padding(.bottom, 5)
                                 }
                             }
-                        } // Brace 5 Close
+                        }
 
                         // --- Nearby Requests section (Uses filteredRequests) ---
-                        VStack(alignment: .leading) { // Brace 11 Open
-                            HStack { // Brace 12 Open
+                        VStack(alignment: .leading) {
+                            HStack {
                                 Text("Nearby Requests")
-                                    .font(.headline).fontWeight(.bold)
+                                    .font(.headline)
+                                    .fontWeight(.bold)
                                 Spacer()
                                 // TODO: Link to a view showing all requests
                                 Image(systemName: "chevron.right")
                                     .foregroundColor(.blue)
-                            } // Brace 12 Close
+                            }
                             .padding(.horizontal)
 
                             // Handle loading/error/empty/list states
-                            if isLoadingRequests { // Brace 13 Open
+                            if isLoadingRequests {
                                 ProgressView()
                                     .padding()
                                     .frame(maxWidth: .infinity)
-                            } else if let requestError { // Brace 13 Close, Brace 14 Open
+                            } else if let requestError {
                                 Text("Error loading requests: \(requestError)")
                                     .foregroundColor(.red)
                                     .padding()
-                            } else if filteredRequests.isEmpty { // Brace 15 Open
-                                Text(searchText.isEmpty ? "No nearby requests found." : "No requests match your search.") // Dynamic empty message
-                                    .foregroundColor(.gray)
-                                    .padding()
-                            } else { // Brace 15 Close, Brace 16 Open
-                                ScrollView(.horizontal, showsIndicators: false) { // Brace 17 Open
-                                    HStack(spacing: 15) { // Brace 18 Open
+                            } else if filteredRequests.isEmpty {
+                                Text(searchText.isEmpty ?
+                                    "No nearby requests found." :
+                                    "No requests match your search.")
+                                .foregroundColor(.gray)
+                                .padding()
+                            } else {
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 15) {
                                         // Iterate over filteredRequests
-                                        ForEach(filteredRequests) { request in // Brace 19 Open
-                                            NavigationLink(destination: RequestDetailView(request: request)) { // Brace 20 Open
+                                        ForEach(filteredRequests) { request in
+                                            NavigationLink(
+                                                destination: RequestDetailView(request: request)
+                                            ) {
                                                 RequestCard(request: request)
-                                            } // Brace 20 Close
+                                            }
                                             .buttonStyle(PlainButtonStyle())
-                                        } // Brace 19 Close
-                                    } // Brace 18 Close
+                                        }
+                                    }
                                     .padding(.horizontal)
-                                } // Brace 17 Close
-                            } // Brace 16 Close
-                        } // Brace 11 Close
+                                }
+                            }
+                        }
                         // --- End Nearby Requests Section ---
 
                         // Map section
-                        VStack(alignment: .leading) { // Brace 21 Open
+                        VStack(alignment: .leading) {
                             HStack { // Add HStack for title and location button
                                 Text("Map")
-                                    .font(.headline).fontWeight(.bold)
+                                    .font(.headline)
+                                    .fontWeight(.bold)
                                 Spacer()
                                 Button {
                                     centerMapOnUserLocation()
@@ -271,16 +280,20 @@ struct HomePageView: View {
                             }
                             .padding(.horizontal)
 
-                            if !locationManager.isAuthorized && locationManager.authorizationStatus != .notDetermined {
-                                Text("Location access denied. Enable in Settings to see nearby requests on map.")
-                                    .font(.caption)
-                                    .foregroundColor(.orange)
-                                    .padding(.horizontal)
+                            if !locationManager.isAuthorized &&
+                                locationManager.authorizationStatus != .notDetermined
+                            {
+                                Text("Location access denied. Enable in Settings to see nearby " +
+                                    "requests on map.")
+                                .font(.caption)
+                                .foregroundColor(.orange)
+                                .padding(.horizontal)
                             }
 
                             // --- Map View Updated ---
                             // Use the filtered 'requestsWithCoordinates' for annotations
-                            Map(coordinateRegion: $region,
+                            Map(
+                                coordinateRegion: $region,
                                 showsUserLocation: locationManager.isAuthorized,
                                 annotationItems: requestsWithCoordinates // <-- Use filtered list
                             ) { request in // Now 'request' is guaranteed to have a coordinate
@@ -291,11 +304,11 @@ struct HomePageView: View {
                             .frame(height: 300)
                             .cornerRadius(10)
                             .padding(.horizontal)
-                            .onTapGesture { // Brace 22 Open
-                                withAnimation { // Brace 23 Open
+                            .onTapGesture {
+                                withAnimation {
                                     isMapFullScreen = true
-                                } // Brace 23 Close
-                            } // Brace 22 Close
+                                }
+                            }
                         } // Brace 21 Close (End Map Section VStack)
                     } // Brace 4 Close (End Main Content VStack)
                     .padding(.vertical)
@@ -305,20 +318,22 @@ struct HomePageView: View {
             .disabled(isMapFullScreen)
 
             // Full Screen Map Overlay
-            if isMapFullScreen { // Brace 24 Open
-                FullScreenMapView(region: $region, isFullScreen: $isMapFullScreen)
+            if isMapFullScreen {
+                FullScreenMapView(nearbyRequests: $nearbyRequests,
+                                  locationManager: locationManager,
+                                  isMapFullScreen: $isMapFullScreen)
                     .transition(.move(edge: .bottom))
                     .zIndex(10)
-            } // Brace 24 Close
+            }
 
-        } // Brace 1 Close (End ZStack)
+        } // End ZStack
         .onAppear { // Request permission and start updates when view appears
             if locationManager.authorizationStatus == .notDetermined {
                 locationManager.requestPermission()
             }
             // Start updates if already authorized or when authorization changes
             locationManager.startUpdatingLocation()
-            
+
             Task {
                 await fetchCategories()
             }
@@ -330,13 +345,13 @@ struct HomePageView: View {
             }
             // Fetch requests whenever location changes (id changes)
             if locationManager.userLocation != nil {
-                 await fetchNearbyRequests() // Call the updated function
+                await fetchNearbyRequests() // Call the updated function
             }
         }
     } // End body
 
     // Function to center the map on the user's current location
-    func centerMapOnUserLocation() { // Brace 25 Open
+    func centerMapOnUserLocation() {
         if let userCoords = locationManager.userLocation {
             print("Centering map on user location: \(userCoords)")
             withAnimation {
@@ -349,33 +364,29 @@ struct HomePageView: View {
             print("Cannot center map, user location not available.")
             // Optionally prompt user to enable location services
         }
-    } // Brace 25 Close
-    
+    }
+
     @MainActor
     func fetchCategories() async {
         isLoadingCategories = true
         categoryError = nil
-        
+
         do {
-            let fetchedCategories: [Category] = try await supabase
-                .from("categories")
-                .select()
-                .execute()
-                .value
-            
+            let fetchedCategories: [Category] = try await supabase.fetchCategories()
+
             self.categories = fetchedCategories
             print("Fetched \(fetchedCategories.count) categories.")
         } catch {
             print("❌ Error fetching categories: \(error)")
             categoryError = error.localizedDescription
         }
-        
+
         isLoadingCategories = false
     }
-    
+
     // --- Updated Function to Fetch Nearby Requests using RPC ---
     @MainActor
-    func fetchNearbyRequests() async { // Brace 26 Open
+    func fetchNearbyRequests() async {
         guard let userCoords = locationManager.userLocation else {
             print("Skipping request fetch: User location not available.")
             // Clear requests if location becomes unavailable?
@@ -386,39 +397,26 @@ struct HomePageView: View {
 
         isLoadingRequests = true
         requestError = nil
-        // nearbyRequests = [] // Decide whether to clear or update
 
         print("Fetching requests near Lat: \(userCoords.latitude), Lon: \(userCoords.longitude) within \(searchRadiusMeters)m")
 
-        // --- Use Encodable struct for parameters ---
-        let params = NearbyRequestsParams(
-            user_lon: userCoords.longitude,
-            user_lat: userCoords.latitude,
-            distance_meters: searchRadiusMeters
-        )
-        // --- End parameter update ---
-
-        do { // Brace 27 Open
-            // Call the RPC function using the Encodable struct
-            let fetchedData: [RequestData] = try await supabase
-                .rpc("nearby_requests", params: params) // Pass the struct directly
-                .execute()
-                .value
+        do {
+            let fetchedData: [RequestData] = try await supabase.fetchNearbyRequests(
+                userCoords: userCoords,
+                searchRadiusMeters: searchRadiusMeters
+            )
 
             self.nearbyRequests = fetchedData
             print("Fetched \(fetchedData.count) nearby requests via RPC.")
 
-        } catch { // Brace 27 Close, Brace 28 Open
+        } catch {
             print("❌ Error fetching nearby requests via RPC: \(error)")
             self.requestError = error.localizedDescription
-            // Clear requests on error?
-            // self.nearbyRequests = []
-        } // Brace 28 Close
+        }
 
         isLoadingRequests = false
-    } // Brace 26 Close
+    }
     // --- End Updated Function ---
-
 } // End HomePageView struct
 
 // MARK: - Supporting Views (CategoryDetailView, CategoryView, FullScreenMapView)
@@ -529,53 +527,88 @@ struct CategoryView: View { // Brace 37 Open
 } // Brace 37 Close
 
 // FullScreenMapView (Original code included)
-struct FullScreenMapView: View { // Brace 40 Open
-    @Binding var region: MKCoordinateRegion
-    @Binding var isFullScreen: Bool
-    @State private var fixedRegion: MKCoordinateRegion
+struct FullScreenMapView: View {
+    @Binding var nearbyRequests: [RequestData]
+    @Binding var isMapFullScreen: Bool
+    @ObservedObject var locationManager: LocationManager
+    @State private var region: MKCoordinateRegion
+    @State private var selectedRequest: RequestData?
+    @State private var requestAnnotations: [RequestAnnotation] = []
 
-    init(region: Binding<MKCoordinateRegion>, isFullScreen: Binding<Bool>) { // Brace 41 Open
-        self._region = region
-        self._isFullScreen = isFullScreen
-        self._fixedRegion = State(initialValue: region.wrappedValue)
-    } // Brace 41 Close
+    init(nearbyRequests: Binding<[RequestData]>,
+         locationManager: LocationManager,
+         isMapFullScreen: Binding<Bool>) {
+        self._nearbyRequests = nearbyRequests
+        self.locationManager = locationManager
+        self._isMapFullScreen = isMapFullScreen
+        _region = State(initialValue: MKCoordinateRegion(
+            center: locationManager.userLocation ?? CLLocationCoordinate2D(latitude: 1.3521, longitude: 103.8198),
+            span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+        ))
+    }
 
-    var body: some View { // Brace 42 Open
-        ZStack(alignment: .topLeading) { // Brace 43 Open
-            Map(coordinateRegion: $fixedRegion,
-                interactionModes: .all,
-                showsUserLocation: true)
-                .edgesIgnoringSafeArea(.all)
-                .gesture(
-                    DragGesture()
-                        .onEnded { _ in // Brace 44 Open
-                            // Limit the span to prevent excessive zooming
-                            fixedRegion.span.latitudeDelta = min(max(fixedRegion.span.latitudeDelta, 0.005), 0.1)
-                            fixedRegion.span.longitudeDelta = min(max(fixedRegion.span.longitudeDelta, 0.005), 0.1)
-
-                            // Update the original region for persistence
-                            region = fixedRegion
-                        } // Brace 44 Close
-                )
-
-            // Back Button
-            Button { // Brace 45 Open
-                withAnimation { // Brace 46 Open
-                    isFullScreen = false
-                } // Brace 46 Close
-            } label: { // Brace 45 Close
-                HStack { // Brace 47 Open
-                    Image(systemName: "chevron.left")
-                    Text("Back")
-                } // Brace 47 Close
-                .padding()
-                .background(Color.white.opacity(0.8))
-                .cornerRadius(10)
-                .padding()
+    var body: some View {
+        NavigationStack {
+            Map(coordinateRegion: $region, annotationItems: requestAnnotations) {
+                annotation in
+                MapAnnotation(coordinate: annotation.coordinate) {
+                    Button {
+                        selectedRequest = annotation.request
+                    } label: {
+                        Image(systemName: "mappin.circle.fill")
+                            .foregroundColor(.blue)
+                            .font(.title)
+                    }
+                }
             }
-        } // Brace 43 Close
-    } // Brace 42 Close
-} // Brace 40 Close
+            .sheet(item: $selectedRequest) { request in
+                RequestDetailView(request: request)
+            }
+            .onAppear {
+                updateAnnotations()
+            }
+            .onChange(of: nearbyRequests) { _ in
+                updateAnnotations()
+            }
+            .onChange(of: locationManager.equatableUserLocation) { newLocation in
+                if let newCoordinate = newLocation.coordinate { //Unwrap here
+                    region.center = newCoordinate
+                }
+            }
+            .navigationTitle("Map")  //Optional title
+            .navigationBarTitleDisplayMode(.inline) // Ensure title displays correctly in sheet
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        withAnimation{
+                            isMapFullScreen = false
+                        }
+                    } label: {
+                        HStack {
+                            Image(systemName: "chevron.left")
+                            Text("Back")
+                        }
+                    }
+                }
+            }
+        }
+        .transition(.move(edge: .bottom))
+    }
+
+    func updateAnnotations() {
+        requestAnnotations = nearbyRequests.map { request in
+            RequestAnnotation(
+                coordinate: CLLocationCoordinate2D(
+                    latitude: request.latitude ?? 0.0,
+                    longitude: request.longitude ?? 0.0
+                ),
+                title: request.title,
+                subtitle: request.description,
+                request: request
+            )
+        }
+    }
+}
 
 // MARK: - Preview
 #Preview { // Brace 48 Open
