@@ -476,8 +476,8 @@ struct NewRequestView: View {
             let filePath = "\(userIdString)/\(uniqueFileName)"
             print("Uploading image to: \(filePath)")
             do {
-                _ = try await supabase.storage.from("request_images").upload(path: filePath, file: imageData, options: FileOptions(contentType: "image/jpeg"))
-                let response = try supabase.storage.from("request_images").getPublicURL(path: filePath)
+                _ = try await supabase.storage.from("request-images").upload(path: filePath, file: imageData, options: FileOptions(contentType: "image/jpeg"))
+                let response = try supabase.storage.from("request-images").getPublicURL(path: filePath)
                 uploadedImageUrl = response.absoluteString
                 print("Image upload successful. URL: \(uploadedImageUrl ?? "N/A")")
             } catch {
