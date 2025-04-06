@@ -72,22 +72,42 @@ struct ReviewCardView: View {
 }
 
 // MARK: - Detailed List Views (Local to ProfileView for now)
-
-// AllHelpRequestsView - Uses RequestData
 struct AllHelpRequestsView: View {
-  let helpRequests: [RequestData]
+    let helpRequests: [RequestData]
 
-  var body: some View {
-    List(helpRequests.sorted { $0.createdAt > $1.createdAt }, id: \.id) { req in
-      VStack(alignment: .leading, spacing: 8) {
-        Text(req.title).font(.headline).fontWeight(.semibold)
-        Text(req.description ?? "No description").font(.body).foregroundColor(.secondary)
-        Text(req.createdAt, style: .date).font(.caption).foregroundColor(.gray)
-      }
-      .padding(.vertical, 4)
+    let columns: [GridItem] = [
+        GridItem(.flexible()),
+        GridItem(.flexible()),
+    ]
+
+    var body: some View {
+        VStack {
+            Text("All Requests")
+                .font(.title)
+                .fontWeight(.bold)
+
+            Spacer()
+            // List of requests for this category
+            if helpRequests.isEmpty {
+                Spacer()
+                Text("No requests posted")
+                    .foregroundColor(.gray)
+                Spacer()
+            } else {
+                ScrollView {  //Wrap LazyVGrid inside ScrollView
+                    LazyVGrid(columns: columns, spacing: 16) {
+                        ForEach(helpRequests) { request in
+                            NavigationLink(destination: RequestDetailView(request: request)) {
+                                RequestCard(request: request)  // Reuse RequestCard
+                                    .padding(8)  // Add padding around each card
+                            }
+                        }
+                    }
+                    .padding()  // Add padding to the grid itself
+                }
+            }
+        }
     }
-    .navigationTitle("All Requests")
-  }
 }
 
 // AllReviewsView (Uses local Review struct)
