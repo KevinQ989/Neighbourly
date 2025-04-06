@@ -2,6 +2,7 @@
 
 import Foundation
 import CoreLocation // Keep if used by GeoJSONPoint
+import SwiftUICore
 
 // MARK: - Profile Models (Existing)
 
@@ -195,6 +196,39 @@ struct Category: Identifiable, Decodable {
     let categoryname: String
     let color: String // Store color as a string from Supabase
     let imageurl: String
+    
+    var swiftUIColor: Color {
+            getColorFromString(colorName: color)
+        }
+    
+    //Hard coding FTW
+    // Private helper function for color conversion
+    private func getColorFromString(colorName: String) -> Color {
+        switch colorName.lowercased() { // Make the switch case insensitive
+        case "red":
+            return .red
+        case "blue":
+            return .blue
+        case "green":
+            return .green
+        case "yellow":
+            return .yellow
+        case "orange":
+            return .orange
+        case "purple":
+            return .purple
+        case "pink":
+            return .pink
+        case "gray":
+            return .gray
+        case "white":
+            return .white
+        case "black":
+            return .black
+        default:
+            return .gray // Provide a default color if the name is not recognized
+        }
+    }
 }
 
 // Represents a chat thread, designed for the ChatView list

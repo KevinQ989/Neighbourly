@@ -440,21 +440,40 @@ struct CategoryDetailView: View {
         VStack {
             // Header remains the same
             HStack {
-                Image(systemName: "tag.fill")  // Placeholder
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 50, height: 50)
-                    .foregroundColor(Color(category.color))
-                    .clipShape(Circle())  // Keep if using actual images
-
+                AsyncImage(url: URL(string: category.imageurl)) { phase in
+                    switch phase {
+                    case .empty:
+                        // Show placeholder or loading indicator
+                        ProgressView()
+                            .frame(width: 50, height: 50)
+                    case .success(let image):
+                        // Show the loaded image
+                        image
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 50, height: 50)
+                            .clipShape(Circle())
+                    case .failure:
+                        // Show fallback for failed loads
+                        Image(systemName: "tag.fill")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 50, height: 50)
+                            .foregroundColor(category.swiftUIColor.opacity(0.1))
+                    @unknown default:
+                        EmptyView()
+                    }
+                }
+                .frame(width: 50, height: 50)
+                .padding(10)
+                
                 Text(category.categoryname)
                     .font(.title)
                     .fontWeight(.bold)
-
+                
                 Spacer()
             }
-            .padding()
-            .background(Color(category.color).opacity(0.1))
+            .background(category.swiftUIColor.opacity(0.1))
 
             // List of requests for this category
             if categoryRequests.isEmpty {
@@ -503,20 +522,13 @@ struct CategoryView: View { // Brace 37 Open
                         .resizable()
                         .scaledToFit()
                         .frame(width: 50, height: 50)
-                        .foregroundColor(Color(category.color))
+                        .foregroundColor(category.swiftUIColor.opacity(0.1))
                 @unknown default:
                     EmptyView()
                 }
             }
             .frame(width: 50, height: 50)
             .padding(10)
-            .background(Color(category.color).opacity(0.2))
-            .clipShape(Circle())
-            .overlay(
-                Circle()
-                    .stroke(Color(category.color), lineWidth: 2)
-            )
-
 
             Text(category.categoryname)
                 .font(.caption)
