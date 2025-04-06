@@ -11,30 +11,30 @@ struct InitialMessageSheetView: View {
     let currentUserId: UUID
     let otherParticipant: Profile // For display
     let request: RequestData // To display context
-
+    
     // State
     @State private var messageText: String = ""
     @State private var isSending = false
     @State private var errorMessage: String?
-
+    
     // Environment
     @Environment(\.dismiss) var dismiss
-
+    
     var body: some View {
         NavigationView { // Embed in NavigationView for title and toolbar
             VStack(spacing: 15) {
                 // Display Request Context
                 HStack {
                     AsyncImage(url: URL(string: request.imageUrl ?? "")) { phase in
-                         switch phase {
-                         case .empty: ZStack { Rectangle().fill(Color.gray.opacity(0.1)); ProgressView() }
-                         case .success(let image): image.resizable().aspectRatio(contentMode: .fill)
-                         case .failure: ZStack { Rectangle().fill(Color.gray.opacity(0.1)); Image(systemName: "photo.fill").foregroundColor(.gray) }
-                         @unknown default: EmptyView()
-                         }
-                     }
-                     .frame(width: 60, height: 60).clipped().cornerRadius(8)
-
+                        switch phase {
+                        case .empty: ZStack { Rectangle().fill(Color.gray.opacity(0.1)); ProgressView() }
+                        case .success(let image): image.resizable().aspectRatio(contentMode: .fill)
+                        case .failure: ZStack { Rectangle().fill(Color.gray.opacity(0.1)); Image(systemName: "photo.fill").foregroundColor(.gray) }
+                        @unknown default: EmptyView()
+                        }
+                    }
+                    .frame(width: 60, height: 60).clipped().cornerRadius(8)
+                    
                     VStack(alignment: .leading) {
                         Text("Regarding Request:")
                             .font(.caption).foregroundColor(.gray)
@@ -46,22 +46,22 @@ struct InitialMessageSheetView: View {
                     Spacer()
                 }
                 .padding(.bottom)
-
+                
                 // Message Input
                 TextEditor(text: $messageText)
                     .frame(height: 150)
                     .border(Color(UIColor.systemGray4))
                     .cornerRadius(5)
-
+                
                 // Error Message Display
                 if let errorMessage {
                     Text(errorMessage)
                         .font(.caption)
                         .foregroundColor(.red)
                 }
-
+                
                 Spacer() // Push button to bottom
-
+                
                 // Send Button
                 Button {
                     Task { await sendMessage() }
@@ -82,7 +82,7 @@ struct InitialMessageSheetView: View {
                     .cornerRadius(10)
                 }
                 .disabled(messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSending)
-
+                
             }
             .padding()
             .navigationTitle("Start Chat")
@@ -94,7 +94,7 @@ struct InitialMessageSheetView: View {
             }
         }
     }
-
+    
     // Function to send the initial message
     @MainActor
     func sendMessage() async {
@@ -103,13 +103,13 @@ struct InitialMessageSheetView: View {
         print("➡️ InitialMessageSheet: Send button tapped.") // Debug Log
         isSending = true
         errorMessage = nil
-
+        
         let params = NewMessageParams(
             chatId: self.chatId,
             senderId: self.currentUserId,
             content: messageText.trimmingCharacters(in: .whitespacesAndNewlines)
         )
-
+        
         do {
             print("➡️ InitialMessageSheet: Sending message to Supabase...") // Debug Log
             try await supabase.from("messages").insert(params, returning: .minimal).execute()
@@ -143,7 +143,9 @@ struct RequestDetailView: View {
     @State private var showingInitialMessageSheet = false
     @State private var chatInfoForSheet: (chatId: Int, otherParticipant: Profile)? = nil
     @State private var chatToNavigate: Chat? = nil
-
+    @State private var isLoadingCloseRequest = false
+    @State private var showingConfirmation = false
+    
     var body: some View {
         // --- WRAP in ZStack for background NavigationLink ---
         ZStack {
@@ -204,7 +206,7 @@ struct RequestDetailView: View {
                         HStack { Image(systemName: "calendar").foregroundColor(.blue); Text("Complete By:"); Text(request.completeBy?.formatted(date: .abbreviated, time: .shortened) ?? "Not specified") }
                         HStack { Image(systemName: "location.fill").foregroundColor(.blue); Text("Location:"); Text(request.locationText ?? "Not specified") }
                         if let coordinate = request.coordinate { HStack { Image(systemName: "map.pin.ellipse").foregroundColor(.green); Text("Coords:"); Text("Lat: \(coordinate.latitude, specifier: "%.4f"), Lon: \(coordinate.longitude, specifier: "%.4f")").font(.caption) } }
-                        HStack { Image(systemName: "info.circle").foregroundColor(.blue); Text("Status:"); Text(request.status.capitalized) }
+                        HStack { Image(systemName: "info.circle").foregroundColor(.blue); Text("Status:"); Text(request.open ? "Open" : "Closed") }
                     }
                     .font(.subheadline)
                     
@@ -215,24 +217,44 @@ struct RequestDetailView: View {
                     
                     // --- Action Button (Keep as is, logic moved to initiateOrFindChat) ---
                     let isMyOwnRequest = (request.userId == currentUserId)
-                    Button {
-                        Task { await initiateOrFindChat() }
-                    } label: {
-                        HStack {
-                            Spacer()
-                            if isInitiatingChat { ProgressView().tint(.white) }
-                            // Button text remains the same, action changes
-                            else { Text(isMyOwnRequest ? "View My Request" : "Chat with Requester") }
-                            Spacer()
+                    let requestIsClosed = !request.open
+                    if !requestIsClosed {
+                        Button {
+                            if isMyOwnRequest { // If it's your own request, close it
+                                showingConfirmation = true
+                            } else { // Otherwise, initiate/find chat
+                                Task { await initiateOrFindChat() }
+                            }
+                        } label: {
+                            HStack {
+                                Spacer()
+                                if isLoadingCloseRequest {
+                                    ProgressView().tint(.white) // Loader if closing request
+                                }
+                                else if isInitiatingChat { ProgressView().tint(.white) } // or finding chat
+                                
+                                else {
+                                    Text(isMyOwnRequest ? "Close Request" : "Chat with Requester")
+                                }
+                                Spacer()
+                            }
+                            .fontWeight(.semibold)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(isMyOwnRequest ? (isLoadingCloseRequest ? .gray : .red) : (isInitiatingChat ? .gray : .blue))
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
                         }
-                        .fontWeight(.semibold)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(isMyOwnRequest || isInitiatingChat ? Color.gray : Color.blue)
-                        .foregroundColor(.white)
-                        .cornerRadius(10)
+                        .disabled((isMyOwnRequest && isLoadingCloseRequest) || (!isMyOwnRequest && isInitiatingChat) )
+                    } else {
+                        Text("Request Closed")
+                             .fontWeight(.semibold)
+                             .frame(maxWidth: .infinity)
+                             .padding()
+                             .background(Color.gray)
+                             .foregroundColor(.white)
+                             .cornerRadius(10)
                     }
-                    .disabled(isMyOwnRequest || isInitiatingChat) // Disable if own request or already processing
                     
                 } // End Main VStack
                 .padding()
@@ -263,8 +285,20 @@ struct RequestDetailView: View {
             }
         }
         // --- END Sheet Modifier ---
+        // --- ADD ALERT MODIFIER (iOS 15+) ---
+        .alert(isPresented: $showingConfirmation) {
+            Alert(
+                title: Text("Confirm Close Request"),
+                message: Text("Are you sure you want to close this request?"),
+                primaryButton: .destructive(Text("Close Request")) {
+                    Task { await closeRequest() } // Close only if confirmed
+                },
+                secondaryButton: .cancel() // User cancels
+            )
+        }
+        // --- END ALERT MODIFIER ---
     } // End body
-
+    
     // --- ADD Computed Property for Navigation Destination ---
     @ViewBuilder
     private var chatDestinationView: some View {
@@ -277,7 +311,7 @@ struct RequestDetailView: View {
         }
     }
     // --- END Computed Property ---
-
+    
     // --- fetchCurrentUserId (Keep as is) ---
     @MainActor func fetchCurrentUserId() async {
         // --- ADD Check ---
@@ -292,10 +326,10 @@ struct RequestDetailView: View {
             currentUserId = try await supabase.auth.session.user.id
         } catch {
             print("❌ Error fetching current user ID: \(error)") } }
-
+    
     // --- fetchRequesterProfile (Keep as is) ---
     @MainActor func fetchRequesterProfile() async { guard requesterProfile == nil, !isLoadingProfile else { return }; isLoadingProfile = true; profileError = nil; do { let profile: Profile = try await supabase.from("profiles").select().eq("id", value: request.userId).single().execute().value; self.requesterProfile = profile; print("Fetched profile for user: \(profile.username ?? profile.id.uuidString)") } catch { print("❌ Error fetching requester profile: \(error)"); self.profileError = error.localizedDescription }; isLoadingProfile = false }
-
+    
     // --- REPLACE initiateOrFindChat function ---
     @MainActor
     func initiateOrFindChat() async {
@@ -322,12 +356,12 @@ struct RequestDetailView: View {
         }
         
         print("➡️ initiateOrFindChat: Starting...")
-
+        
         isInitiatingChat = true
         chatError = nil
         chatToNavigate = nil // Reset navigation state
         chatInfoForSheet = nil // Reset sheet state
-
+        
         // Define struct for decoding chat info
         struct ChatInfo: Decodable, Identifiable {
             let id: Int
@@ -348,21 +382,21 @@ struct RequestDetailView: View {
                 case helperId = "helper_id"; case createdAt = "created_at"; case requests // Key matches table name
             }
         }
-
+        
         do {
             // 1. Check for existing chat FOR THIS SPECIFIC REQUEST
             print("➡️ initiateOrFindChat: Checking for existing chat for Request ID \(request.id)")
             let existingChats: [ChatInfo] = try await supabase
                 .from("chats")
-                // Include request details in select for navigation case
+            // Include request details in select for navigation case
                 .select("id, request_id, requester_id, helper_id, created_at, requests(title, image_url)")
                 .eq("request_id", value: request.id) // Filter by request_id
-                // Also ensure the current user is one of the participants
+            // Also ensure the current user is one of the participants
                 .or("and(requester_id.eq.\(currentUserId),helper_id.eq.\(request.userId)),and(requester_id.eq.\(request.userId),helper_id.eq.\(currentUserId))")
                 .limit(1)
                 .execute()
                 .value
-
+            
             if let existingChatInfo = existingChats.first {
                 // --- Existing Chat Found for this Request -> NAVIGATE ---
                 print("➡️ initiateOrFindChat: Found existing chat ID \(existingChatInfo.id) for this request. Navigating...")
@@ -380,39 +414,39 @@ struct RequestDetailView: View {
                 self.chatToNavigate = chatForNav
                 // --- END NAVIGATE ---
             } else {
-                  // --- No Chat for this Request -> CREATE NEW & SHOW SHEET ---
-                  print("➡️ initiateOrFindChat: No existing chat for request \(request.id). Creating new one...")
-                  let newChatParams = NewChatParams(
-                      requestId: request.id, // MUST associate with this request
-                      requesterId: request.userId,
-                      helperId: currentUserId
-                  )
-
-                  // Insert and get the new chat ID back
-                  // We only strictly need the ID here to pass to the sheet
-                  struct CreatedChatId: Decodable { let id: Int }
-                  let createdChat: CreatedChatId = try await supabase
-                      .from("chats")
-                      .insert(newChatParams, returning: .representation) // Representation needed if RLS modifies defaults
-                      .select("id") // Only select the ID
-                      .single()
-                      .execute()
-                      .value
-
-                  print("➡️ initiateOrFindChat: Created new chat ID \(createdChat.id)")
-
-                  // Prepare and show the sheet for the *new* chat ID
-                  self.chatInfoForSheet = (chatId: createdChat.id, otherParticipant: requesterProfile)
-                  self.showingInitialMessageSheet = true
-                  // --- END CREATE NEW & SHOW SHEET ---
-              }
+                // --- No Chat for this Request -> CREATE NEW & SHOW SHEET ---
+                print("➡️ initiateOrFindChat: No existing chat for request \(request.id). Creating new one...")
+                let newChatParams = NewChatParams(
+                    requestId: request.id, // MUST associate with this request
+                    requesterId: request.userId,
+                    helperId: currentUserId
+                )
+                
+                // Insert and get the new chat ID back
+                // We only strictly need the ID here to pass to the sheet
+                struct CreatedChatId: Decodable { let id: Int }
+                let createdChat: CreatedChatId = try await supabase
+                    .from("chats")
+                    .insert(newChatParams, returning: .representation) // Representation needed if RLS modifies defaults
+                    .select("id") // Only select the ID
+                    .single()
+                    .execute()
+                    .value
+                
+                print("➡️ initiateOrFindChat: Created new chat ID \(createdChat.id)")
+                
+                // Prepare and show the sheet for the *new* chat ID
+                self.chatInfoForSheet = (chatId: createdChat.id, otherParticipant: requesterProfile)
+                self.showingInitialMessageSheet = true
+                // --- END CREATE NEW & SHOW SHEET ---
+            }
         } catch {
             print("❌ initiateOrFindChat: Error - \(error)")
             if let decodingError = error as? DecodingError {
-                 print("--> Decoding Error Details: \(decodingError)")
-                 chatError = "Could not process chat data response. (\(error.localizedDescription))"
+                print("--> Decoding Error Details: \(decodingError)")
+                chatError = "Could not process chat data response. (\(error.localizedDescription))"
             } else {
-                 chatError = "Could not start chat: \(error.localizedDescription)"
+                chatError = "Could not start chat: \(error.localizedDescription)"
             }
         }
         isInitiatingChat = false
@@ -422,5 +456,39 @@ struct RequestDetailView: View {
         // --- End: Add Debug Log ---
     }
     // --- END REPLACE initiateOrFindChat ---
-
+    
+    @MainActor
+    func closeRequest() async {
+        guard isViewAuthenticated else {
+            print("❌ RequestDetailView closeRequest: View not authenticated.")
+            return
+        }
+        
+        isLoadingCloseRequest = true // Start the local loading indicator
+        
+        // Debug Prints
+        print("Attempting to close request with ID: \(request.id)")
+        print("Current userId: \(String(describing: currentUserId))")
+        
+        do {
+            let updateRequest: [RequestData] = try await supabase.from("requests")
+                .update(["open": false])  // Set open to false
+                .eq("id", value: request.id) // Ensure it updates THIS SPECIFIC REQUEST by this ID
+                .execute()
+                .value
+            
+            if updateRequest.count > 0 {
+                print("Number of closed requests is greater than 0")
+                // Fetch latest data to trigger the UI, you can avoid that if you do not want loading, instead read local data to sync value
+                print("Re-fetching RequestData to update UI")
+                
+                print("Closed request ID \(request.id) successfully")
+            }
+        }  catch { //Catch
+            print("❌ Error updating request on table - \(error)")
+        } // Catch table end
+        
+        isLoadingCloseRequest = false
+    }
+    
 } // End RequestDetailView struct

@@ -86,7 +86,7 @@ struct RequestParams: Encodable {
     var locationText: String?
     var locationGeo: GeoJSONPoint? // <-- Add location_geo field using GeoJSONPoint
     var imageUrl: String?
-    var status: String = "open"
+    var open: Bool = true
 
     enum CodingKeys: String, CodingKey {
         case userId = "user_id"
@@ -97,7 +97,7 @@ struct RequestParams: Encodable {
         case locationText = "location_text"
         case locationGeo = "location_geo" // <-- Map locationGeo
         case imageUrl = "image_url"
-        case status
+        case open
     }
 }
 
@@ -126,7 +126,7 @@ struct RequestData: Decodable, Identifiable, Equatable, Hashable { // Add Equata
     let locationText: String?
     let locationGeo: GeoJSONPoint? // <-- Add location_geo field
     let imageUrl: String?
-    let status: String
+    let open: Bool
     let createdAt: Date
     // let updatedAt: Date // Add if needed
 
@@ -140,14 +140,14 @@ struct RequestData: Decodable, Identifiable, Equatable, Hashable { // Add Equata
         case locationText = "location_text"
         case locationGeo = "location_geo" // <-- Map locationGeo
         case imageUrl = "image_url"
-        case status
+        case open
         case createdAt = "created_at"
         // case updatedAt = "updated_at"
     }
 
     // Implement Equatable based on ID
     static func == (lhs: RequestData, rhs: RequestData) -> Bool {
-        lhs.id == rhs.id
+        return lhs.id == rhs.id
     }
     // Implement Hashable based on ID
     func hash(into hasher: inout Hasher) {

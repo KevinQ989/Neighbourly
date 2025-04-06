@@ -387,6 +387,7 @@ struct HomePageView: View {
     // --- Updated Function to Fetch Nearby Requests using RPC ---
     @MainActor
     func fetchNearbyRequests() async {
+        
         guard let userCoords = locationManager.userLocation else {
             print("Skipping request fetch: User location not available.")
             // Clear requests if location becomes unavailable?
@@ -398,20 +399,30 @@ struct HomePageView: View {
         isLoadingRequests = true
         requestError = nil
 
-        print("Fetching requests near Lat: \(userCoords.latitude), Lon: \(userCoords.longitude) within \(searchRadiusMeters)m")
-
         do {
-            let fetchedData: [RequestData] = try await supabase.fetchNearbyRequests(
-                userCoords: userCoords,
-                searchRadiusMeters: searchRadiusMeters
-            )
+            let userId = try await supabase.auth.session.user.id
+            print("Fetching requests near Lat: \(userCoords.latitude), Lon: \(userCoords.longitude) within \(searchRadiusMeters)m")
 
-            self.nearbyRequests = fetchedData
-            print("Fetched \(fetchedData.count) nearby requests via RPC.")
+           do {
+                let fetchedData: [RequestData] = try await supabase.fetchNearbyRequests(
+                    userCoords: userCoords,
+                    searchRadiusMeters: searchRadiusMeters
+                )
+               // --- Filter out User id here or if this can be slow you can move it down to the SQL data fetch - To Save Memory----//
 
-        } catch {
-            print("❌ Error fetching nearby requests via RPC: \(error)")
-            self.requestError = error.localizedDescription
+                //Iterate it by local function.
+                nearbyRequests =  fetchedData.filter {$0.userId != userId} //Only load requests != User, to not see.  Most Simple method here.
+
+                print("Fetched \(fetchedData.count) nearby requests via RPC.")
+
+            } catch {
+                print("❌ Error fetching nearby requests via RPC: \(error)")
+                self.requestError = error.localizedDescription
+            }
+
+        } catch{
+            print("❌ Error, cant get userId")
+            //Handle userId error
         }
 
         isLoadingRequests = false
