@@ -298,3 +298,24 @@ struct NewMessageParams: Encodable {
         // createdAt is handled by database default
     }
 }
+
+struct ReviewParams: Encodable {
+    let my_id: UUID
+}
+
+// Review Model
+struct Review: Identifiable, Decodable {
+    let id: UUID
+    let reviewerName: String
+    let reviewerImageUrl: String?
+    let rating: Int
+    let description: String
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case reviewerName = "username"
+        case reviewerImageUrl = "avatar_url"
+        case rating
+        case description
+    }
+}

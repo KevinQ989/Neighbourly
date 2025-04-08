@@ -28,7 +28,7 @@ extension SupabaseClient {
             .rpc("nearby_requests", params: params) // Pass the struct directly
             .execute()
             .value
-
+        
         return fetchedData
     }
     
@@ -41,5 +41,21 @@ extension SupabaseClient {
             .value
         
         return fetchedCategories
+    }
+    
+    @MainActor
+    func fetchMyReviews(
+        userId: UUID
+    ) async throws -> [Review] {
+        let params = ReviewParams(
+            my_id: userId
+        )
+        let fetchedReviews: [Review] = try await self
+            .rpc("my_reviews", params: params)
+            .select()
+            .execute()
+            .value
+        
+        return fetchedReviews
     }
 }
