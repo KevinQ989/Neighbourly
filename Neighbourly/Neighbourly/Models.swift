@@ -2,7 +2,7 @@
 
 import Foundation
 import CoreLocation // Keep if used by GeoJSONPoint
-import SwiftUICore
+import SwiftUICore // Assuming this is needed for Color, otherwise import SwiftUI
 
 // MARK: - Profile Models (Existing)
 
@@ -158,7 +158,7 @@ struct RequestData: Decodable, Identifiable, Equatable, Hashable { // Add Equata
     var coordinate: CLLocationCoordinate2D? {
         locationGeo?.coordinate
     }
-    
+
     var latitude: Double? {
         locationGeo?.coordinate?.latitude
     }
@@ -191,16 +191,17 @@ struct ChatMessage: Decodable, Identifiable, Hashable {
 struct Category: Identifiable, Decodable {
     // Use categoryid as the id for Identifiable
     var id: Int { categoryid }
-    
+
     let categoryid: Int
     let categoryname: String
     let color: String // Store color as a string from Supabase
     let imageurl: String
-    
+
+    // Assuming SwiftUICore provides Color or import SwiftUI
     var swiftUIColor: Color {
             getColorFromString(colorName: color)
         }
-    
+
     //Hard coding FTW
     // Private helper function for color conversion
     private func getColorFromString(colorName: String) -> Color {
@@ -232,21 +233,31 @@ struct Category: Identifiable, Decodable {
 }
 
 // Represents a chat thread, designed for the ChatView list
-struct Chat: Identifiable, Equatable, Hashable { // Removed Decodable for now as we construct manually
-    let id: Int // Chat ID
-    let requestId: Int? // Optional associated request ID
-    let otherParticipant: Profile // Profile of the *other* user in the chat
-    var lastMessageContent: String? // Mutable for combining results
-    var lastMessageTimestamp: Date? // Mutable for combining results
-    let createdAt: Date // When the chat was created
-    
-    // --- ADDED Properties for Request Context ---
-    let requestTitle: String?
-    let requestImageUrl: String?
-    // --- END ADDED Properties ---
-    
-    let lastMessageSenderId: UUID?
-    var isUnread: Bool = false // Default to false, will be set during fetch
+// **** THIS STRUCT IS UPDATED ****
+// In Models.swift
+
+struct Chat: Identifiable, Equatable, Hashable {
+    let id: Int // Keep as let
+    let requestId: Int? // Keep as let
+    let otherParticipant: Profile // Keep as let
+    var lastMessageContent: String? // Already var
+    var lastMessageTimestamp: Date? // Already var
+    let createdAt: Date // Keep as let
+    let requestTitle: String? // Keep as let
+    let requestImageUrl: String? // Keep as let
+    let lastMessageSenderId: UUID? // Keep as let
+    var isUnread: Bool = false // Already var
+
+    // --- CHANGE THESE FROM let TO var ---
+    let requesterId: UUID // Keep as let (doesn't change)
+    let helperId: UUID    // Keep as let (doesn't change)
+    var offerMadeAt: Date?         // <<< Change to var
+    var offerAcceptedAt: Date?     // <<< Change to var
+    var helperReviewedAt: Date?    // <<< Change to var
+    var requesterReviewedAt: Date? // <<< Change to var
+    // --- END CHANGES ---
+
+    // Equatable, Hashable, init(), computed properties remain the same
 
     // Implement Equatable based on ID
     static func == (lhs: Chat, rhs: Chat) -> Bool {
@@ -257,8 +268,15 @@ struct Chat: Identifiable, Equatable, Hashable { // Removed Decodable for now as
          hasher.combine(id)
      }
 
-    // Initializer for combining results
-    init(id: Int, requestId: Int?, otherParticipant: Profile, createdAt: Date, lastMessageContent: String? = nil, lastMessageTimestamp: Date? = nil, requestTitle: String? = nil, requestImageUrl: String? = nil, lastMessageSenderId: UUID? = nil, isUnread: Bool = false) {
+    // Initializer remains the same (accepts the values)
+    init(id: Int, requestId: Int?, otherParticipant: Profile, createdAt: Date,
+         lastMessageContent: String? = nil, lastMessageTimestamp: Date? = nil,
+         requestTitle: String? = nil, requestImageUrl: String? = nil,
+         lastMessageSenderId: UUID? = nil, isUnread: Bool = false,
+         requesterId: UUID, helperId: UUID, offerMadeAt: Date? = nil,
+         offerAcceptedAt: Date? = nil, helperReviewedAt: Date? = nil,
+         requesterReviewedAt: Date? = nil
+        ) {
         self.id = id
         self.requestId = requestId
         self.otherParticipant = otherParticipant
@@ -269,8 +287,31 @@ struct Chat: Identifiable, Equatable, Hashable { // Removed Decodable for now as
         self.requestImageUrl = requestImageUrl
         self.lastMessageSenderId = lastMessageSenderId
         self.isUnread = isUnread
+        self.requesterId = requesterId
+        self.helperId = helperId
+        self.offerMadeAt = offerMadeAt
+        self.offerAcceptedAt = offerAcceptedAt
+        self.helperReviewedAt = helperReviewedAt
+        self.requesterReviewedAt = requesterReviewedAt
+    }
+
+    // Computed properties remain the same
+    var isOfferMade: Bool { offerMadeAt != nil }
+    var isOfferAccepted: Bool { offerAcceptedAt != nil }
+    func didCurrentUserReview(currentUserId: UUID?) -> Bool {
+        guard let currentUserId = currentUserId else { return false }
+        if currentUserId == helperId {
+            return helperReviewedAt != nil
+        } else if currentUserId == requesterId {
+            return requesterReviewedAt != nil
+        }
+        print("⚠️ didCurrentUserReview check: currentUserId \(currentUserId) is neither helper (\(helperId)) nor requester (\(requesterId))")
+        return false
     }
 }
+
+// **** END UPDATED Chat STRUCT ****
+
 
 // Struct for creating a new chat
 struct NewChatParams: Encodable {
@@ -299,23 +340,68 @@ struct NewMessageParams: Encodable {
     }
 }
 
-struct ReviewParams: Encodable {
-    let my_id: UUID
-}
+// MARK: - Review Models (Updated)
 
-// Review Model
+// Struct for fetching reviews (matches corrected DB structure)
+// **** THIS STRUCT IS UPDATED ****
 struct Review: Identifiable, Decodable {
-    let id: UUID
-    let reviewerName: String
-    let reviewerImageUrl: String?
+    let id: UUID // Added PK
+    let chatId: Int // Added FK (use Int to match BIGINT/int8)
+    let requestId: Int? // Added FK (Optional if nullable in DB)
+    let reviewerId: UUID // Matches 'reviewerid' column
+    let revieweeId: UUID // Matches 'revieweeid' column
     let rating: Int
-    let description: String
+    let description: String? // Matches 'description' column, make optional if nullable
+    let createdAt: Date // Added timestamp
+
+    // --- ADDED for ProfileView Card ---
+    var reviewerName: String? // Store fetched name
+    var reviewerImageUrl: String? // Store fetched URL
+    // --- END ADDED ---
 
     enum CodingKeys: String, CodingKey {
         case id
-        case reviewerName = "username"
-        case reviewerImageUrl = "avatar_url"
+        case chatId = "chat_id"
+        case requestId = "request_id"
+        case reviewerId = "reviewerid" // <-- Use DB column name 'reviewerid'
+        case revieweeId = "revieweeid" // <-- Use DB column name 'revieweeid'
         case rating
-        case description
+        case description // <-- Use DB column name 'description'
+        case createdAt = "created_at"
+
+        // --- ADDED CodingKeys if fetching joined data ---
+        // Adjust these based on your actual fetch query in ProfileView/loadReviews
+        case reviewerName = "reviewer_full_name" // Example if joined
+        case reviewerImageUrl = "reviewer_avatar_url" // Example if joined
+        // --- END ADDED ---
     }
+}
+// **** END UPDATED Review STRUCT ****
+
+
+// Struct for submitting a new review
+// **** THIS STRUCT IS UPDATED ****
+struct NewReviewParams: Encodable {
+    let chatId: Int // Use Int for BIGINT/int8
+    let requestId: Int? // Optional
+    let reviewerId: UUID // Swift variable name
+    let revieweeId: UUID // Swift variable name
+    let rating: Int
+    let description: String? // Swift variable name
+
+    enum CodingKeys: String, CodingKey {
+        case chatId = "chat_id"
+        case requestId = "request_id"
+        case reviewerId = "reviewerid" // <-- Map to DB column 'reviewerid'
+        case revieweeId = "revieweeid" // <-- Map to DB column 'revieweeid'
+        case rating
+        case description // <-- Map to DB column 'description'
+    }
+}
+// **** END UPDATED NewReviewParams STRUCT ****
+
+
+// Struct for fetching reviews via RPC (if used)
+struct ReviewParams: Encodable {
+    let my_id: UUID
 }

@@ -1,3 +1,5 @@
+// ProfileView.swift
+
 import SwiftUI
 import Supabase
 
@@ -17,7 +19,7 @@ let dateFormatter: DateFormatter = {
 // RequestCardView - Uses RequestData
 struct RequestCardView: View {
     let request: RequestData
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             AsyncImage(url: URL(string: request.imageUrl ?? "")) { phase in
@@ -29,7 +31,7 @@ struct RequestCardView: View {
                 }
             }
             .frame(height: 150).clipped()
-            
+
             VStack(alignment: .leading, spacing: 8) {
                 Text(request.title).font(.headline).fontWeight(.semibold).lineLimit(1)
                 Text(request.description ?? "No description").font(.body).lineLimit(2).foregroundColor(.secondary)
@@ -42,9 +44,10 @@ struct RequestCardView: View {
 }
 
 // ReviewCardView
+// **** THIS STRUCT IS UPDATED ****
 struct ReviewCardView: View {
     let review: Review
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top) {
@@ -62,31 +65,36 @@ struct ReviewCardView: View {
                     }
                 }
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(review.reviewerName).font(.headline).fontWeight(.bold)
+                    // --- CHANGE HERE: Use nil-coalescing ---
+                    Text(review.reviewerName ?? "Unknown User") // Provide default value
+                        .font(.headline).fontWeight(.bold)
+                    // --- END CHANGE ---
                     HStack(spacing: 2) { ForEach(0..<5) { index in Image(systemName: index < review.rating ? "star.fill" : "star").foregroundColor(index < review.rating ? .yellow : .gray) } }
-                    Text(review.description).font(.body).lineLimit(2).foregroundColor(.secondary)
+                    Text(review.description ?? "No comment") // Use 'description' as per your preference, provide default
+                        .font(.body).lineLimit(2).foregroundColor(.secondary)
                 }
             }
         }
         .padding().frame(width: 250, alignment: .leading).background(Color(.systemGray6)).cornerRadius(10).shadow(color: Color.black.opacity(0.1), radius: 5, x: 0, y: 2)
     }
 }
+// **** END UPDATED ReviewCardView ****
 
 // MARK: - Detailed List Views (Local to ProfileView for now)
 struct AllHelpRequestsView: View {
     let helpRequests: [RequestData]
-    
+
     let columns: [GridItem] = [
         GridItem(.flexible()),
         GridItem(.flexible()),
     ]
-    
+
     var body: some View {
         VStack {
             Text("All Requests")
                 .font(.title)
                 .fontWeight(.bold)
-            
+
             Spacer()
             // List of requests for this category
             if helpRequests.isEmpty {
@@ -112,6 +120,7 @@ struct AllHelpRequestsView: View {
 }
 
 // AllReviewsView
+// **** THIS STRUCT IS UPDATED ****
 struct AllReviewsView: View {
     let reviews: [Review] // From this view or a function
 
@@ -134,8 +143,10 @@ struct AllReviewsView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(review.reviewerName)
+                        // --- CHANGE HERE: Use nil-coalescing ---
+                        Text(review.reviewerName ?? "Unknown User") // Provide default value
                             .fontWeight(.bold)
+                        // --- END CHANGE ---
 
                         HStack(spacing: 2) {
                             ForEach(0..<5, id: \.self) { index in
@@ -144,7 +155,7 @@ struct AllReviewsView: View {
                             }
                         }
 
-                        Text(review.description) // For description check
+                        Text(review.description ?? "No comment") // Use 'description', provide default
                             .font(.body)
                             .foregroundColor(.secondary)
                     }
@@ -155,6 +166,7 @@ struct AllReviewsView: View {
         .navigationTitle("All Reviews")
     }
 }
+// **** END UPDATED AllReviewsView ****
 
 // MARK: - Main Profile View (Updated)
 
@@ -164,7 +176,7 @@ struct ProfileView: View { // Brace 1 Open
     @State private var userRequests: [RequestData] = []
     @State private var isLoading = false
     @State private var errorMessage: String?
-    
+
     @State private var reviews: [Review] = []
     @State private var isLoadingReviews = false
     @State private var reviewsError: String?
@@ -209,7 +221,7 @@ struct ProfileView: View { // Brace 1 Open
                             .frame(width: 80, height: 80)
                             .clipShape(Circle())
                             .overlay(Circle().stroke(Color.gray.opacity(0.2), lineWidth: 1)) // Subtle border
-                            
+
                             VStack(alignment: .leading, spacing: 4) { // Brace 11 Open
                                 Text(profile.fullName ?? "No Name") // Use fetched name
                                     .font(.title)
@@ -222,9 +234,9 @@ struct ProfileView: View { // Brace 1 Open
                                     .font(.caption)
                                     .foregroundColor(.gray)
                             } // Brace 11 Close
-                            
+
                             Spacer() // Push Edit Profile button to the right
-                            
+
                             NavigationLink(destination: EditProfileView(onProfileUpdated: {
                                 // Refresh profile data when EditProfileView updates it
                                 Task { await loadProfileData() }
@@ -238,7 +250,7 @@ struct ProfileView: View { // Brace 1 Open
                         } // Brace 10 Close
                         .padding(.horizontal)
                         // --- End Profile Header Update ---
-                        
+
                         // Requests Section Header
                         HStack { // Brace 12 Open
                             Text("My Requests") // Changed title
@@ -254,7 +266,7 @@ struct ProfileView: View { // Brace 1 Open
                             } // Brace 13 Close
                         } // Brace 12 Close
                         .padding(.horizontal)
-                        
+
                         // Horizontally scrolling Requests - Use fetched data
                         if userRequests.isEmpty { // Brace 14 Open
                             Text("You haven't posted any requests yet.")
@@ -276,8 +288,8 @@ struct ProfileView: View { // Brace 1 Open
                                 .padding(.horizontal)
                             } // Brace 16 Close
                         } // Brace 15 Close
-                        
-                        // Reviews Section Header (Placeholder)
+
+                        // Reviews Section Header
                         HStack { // Brace 19 Open
                             Text("Reviews")
                                 .font(.title2)
@@ -292,9 +304,14 @@ struct ProfileView: View { // Brace 1 Open
                             } // Brace 20 Close
                         } // Brace 19 Close
                         .padding(.horizontal)
-                        
-                        // Horizontally scrolling Reviews (Placeholder using sample data)
-                        if reviews.isEmpty { // Brace 21 Open
+
+                        // Horizontally scrolling Reviews
+                        if isLoadingReviews { // Show loader while reviews are loading
+                            ProgressView().padding(.horizontal)
+                        } else if let reviewsError { // Show error if loading failed
+                            Text("Error loading reviews: \(reviewsError)")
+                                .font(.caption).foregroundColor(.red).padding(.horizontal)
+                        } else if reviews.isEmpty { // Brace 21 Open
                             Text("You haven't received any reviews yet.")
                                 .font(.caption)
                                 .foregroundColor(.gray)
@@ -309,7 +326,7 @@ struct ProfileView: View { // Brace 1 Open
                                 .padding(.horizontal)
                             } // Brace 23 Close
                         } // Brace 22 Close
-                        
+
                     } // Brace 9 Close
                     .padding(.vertical)
                 } // Brace 8 Close
@@ -326,7 +343,7 @@ struct ProfileView: View { // Brace 1 Open
             await loadReviews() // Call the Review task
         } // Brace 26
     } // Brace 2 Close
-    
+
     // Function to load profile and requests
     @MainActor
     func loadProfileData() async { // Brace 27 Open
@@ -343,38 +360,121 @@ struct ProfileView: View { // Brace 1 Open
         } // Brace 29 Close
         isLoading = false
     } // Brace 27 Close
-    
+
     //Reviews Data Call
+    // Inside ProfileView.swift
+
+    // **** REPLACE THIS ENTIRE FUNCTION ****
     @MainActor
     func loadReviews() async {
-    
-        guard !isLoadingReviews else { //This is fine we check here before we load data
+
+        guard !isLoadingReviews else {
             print("Skipping review fetch: Already loading reviews.")
                 return
         }
-            
+
         isLoadingReviews = true
         reviewsError = nil
+        print("➡️ loadReviews: Starting fetch...") // Log start
 
         do {
+            // 1. Get the current user's ID
             let userId = try await supabase.auth.session.user.id
-            let fetchedReviews: [Review] = try await supabase.fetchMyReviews(
-                userId: userId)
-            self.reviews = fetchedReviews
-            print("✅ Fetched \(fetchedReviews.count) reviews.") //Debug Test
+            print("➡️ loadReviews: Fetching reviews for user ID: \(userId)")
+
+            // 2. Define the struct to decode the joined data
+            //    This needs to match the structure returned by the SELECT query
+            struct ReviewWithReviewer: Decodable, Identifiable {
+                let id: UUID
+                let chatId: Int
+                let requestId: Int?
+                let reviewerId: UUID // Matches 'reviewerid' column
+                let revieweeId: UUID // Matches 'revieweeid' column
+                let rating: Int
+                let description: String? // Matches 'description' column
+                let createdAt: Date
+                // Nested struct to hold the joined reviewer profile data
+                struct ReviewerProfile: Decodable {
+                    let fullName: String?
+                    let avatarUrl: String?
+                    enum CodingKeys: String, CodingKey {
+                        case fullName = "full_name"
+                        case avatarUrl = "avatar_url"
+                    }
+                }
+                let reviewer: ReviewerProfile? // Matches the alias 'reviewer' in SELECT
+
+                enum CodingKeys: String, CodingKey {
+                    case id
+                    case chatId = "chat_id"
+                    case requestId = "request_id"
+                    case reviewerId = "reviewerid"
+                    case revieweeId = "revieweeid"
+                    case rating
+                    case description
+                    case createdAt = "created_at"
+                    case reviewer // Matches the alias 'reviewer' used in SELECT
+                }
+            }
+
+            // 3. Perform the query joining reviews and profiles
+            print("➡️ loadReviews: Executing query to fetch reviews with reviewer profiles...")
+            let fetchedReviewsWithProfile: [ReviewWithReviewer] = try await supabase.from("reviews")
+                .select("""
+                    id,
+                    chat_id,
+                    request_id,
+                    reviewerid,
+                    revieweeid,
+                    rating,
+                    description,
+                    created_at,
+                    reviewer:reviewerid ( full_name, avatar_url )
+                """) // Select review fields and join profile data for reviewerid aliased as 'reviewer'
+                .eq("revieweeid", value: userId) // Filter for reviews ABOUT the current user
+                .order("created_at", ascending: false) // Show newest reviews first
+                .execute()
+                .value
+
+            print("➡️ loadReviews: Query returned \(fetchedReviewsWithProfile.count) raw review records.")
+
+            // 4. Map the fetched data to the Review model used by the UI
+            self.reviews = fetchedReviewsWithProfile.map { fetchedReview -> Review in
+                // Create the Review object, populating reviewerName/ImageUrl from the joined data
+                return Review(
+                    id: fetchedReview.id,
+                    chatId: fetchedReview.chatId,
+                    requestId: fetchedReview.requestId,
+                    reviewerId: fetchedReview.reviewerId,
+                    revieweeId: fetchedReview.revieweeId,
+                    rating: fetchedReview.rating,
+                    description: fetchedReview.description,
+                    createdAt: fetchedReview.createdAt,
+                    // Populate from the nested 'reviewer' data
+                    reviewerName: fetchedReview.reviewer?.fullName,
+                    reviewerImageUrl: fetchedReview.reviewer?.avatarUrl
+                )
+            }
+
+            print("✅ loadReviews: Successfully processed \(self.reviews.count) reviews.")
+
         } catch {
-            print("❌ Error fetching reviews: \(error)") //Debug
-            reviewsError = error.localizedDescription
-             }
-        
-            isLoadingReviews = false
-    
-        // --- Start: Add Debug Log ---
-            // Note: isSending should be false here unless an error occurred
-            print("➡️ fetchReviewsFinished")
-            // --- End: Add Debug Log ---
-    
+            print("❌ loadReviews: Error fetching reviews - \(error)")
+            // Provide more context if it's a decoding error
+            if let decodingError = error as? DecodingError {
+                print("--> Decoding Error Details: \(decodingError)")
+                reviewsError = "Failed to process review data. (\(error.localizedDescription))"
+            } else {
+                reviewsError = "Failed to load reviews: \(error.localizedDescription)"
+            }
+             self.reviews = [] // Clear reviews on error
+        }
+
+        isLoadingReviews = false
+        print("➡️ loadReviews: Finished.")
     }
+    // **** END REPLACEMENT FUNCTION ****
+
 } // Brace 1 Close
 
 #Preview {
