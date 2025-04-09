@@ -12,14 +12,14 @@ enum ChatFilter {
 struct ChatRow: View {
     let chat: Chat
     let currentUserId: UUID?
-    
+
     // Date formatter for relative time
     private static var relativeDateFormatter: RelativeDateTimeFormatter = {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
         return formatter
     }()
-    
+
     // Function to format timestamp relatively
     private func formatTimestamp(_ date: Date?) -> String {
         guard let date = date else { return "" }
@@ -29,7 +29,7 @@ struct ChatRow: View {
             return date.formatted(.dateTime.month(.abbreviated).day())
         }
     }
-    
+
     var body: some View {
         HStack(spacing: 12) {
             // --- Use AsyncImage for Avatar ---
@@ -52,7 +52,7 @@ struct ChatRow: View {
             .frame(width: 50, height: 50)
             .clipShape(Circle())
             .overlay(Circle().stroke(Color.gray.opacity(0.2), lineWidth: 1))
-            
+
             // --- ADD Unread Indicator Overlay ---
             .overlay(alignment: .topTrailing) {
                 if chat.isUnread {
@@ -64,9 +64,9 @@ struct ChatRow: View {
                 }
             }
             // --- END Unread Indicator ---
-            
+
             // --- End AsyncImage ---
-            
+
             VStack(alignment: .leading, spacing: 2) { // Adjust spacing
                 HStack {
                     Text(chat.otherParticipant.fullName ?? chat.otherParticipant.username ?? "Unknown User")
@@ -101,7 +101,7 @@ struct ChatRow: View {
                 .fontWeight(chat.isUnread ? .medium : .regular)
                 // --- END MODIFY Last Message ---
                 Spacer()
-                
+
                 // --- ADD Request Image (Conditional) ---
                 // Only show if requestImageUrl exists and is not empty
                 if let imageUrl = chat.requestImageUrl, !imageUrl.isEmpty {
@@ -127,9 +127,9 @@ struct ChatRow: View {
 }
 
 
-struct ChatView: View { // Brace 1 Open
+struct ChatView: View {
     @Environment(\.isAuthenticatedValue) private var isViewAuthenticated
-    
+
     // State
     @State private var selectedTab: ChatFilter = .all
     @State private var chats: [Chat] = []
@@ -158,7 +158,7 @@ struct ChatView: View { // Brace 1 Open
         return decoder
     }()
 
-    var body: some View { // Brace 2 Open
+    var body: some View {
         VStack(spacing: 0) { // Use spacing 0
 
             // Filter Buttons (Commented out)
@@ -212,10 +212,9 @@ struct ChatView: View { // Brace 1 Open
             await fetchCurrentUserId()
             await fetchChats()
         }
-    } // Brace 2 Close
+    } // End body
 
-    // --- ADD fetchCurrentUserId ---
-    // (Similar to the one in RequestDetailView, could be moved to a shared ViewModel)
+    // --- fetchCurrentUserId (Unchanged) ---
     @MainActor
     func fetchCurrentUserId() async {
         guard isViewAuthenticated else { return }
@@ -229,10 +228,9 @@ struct ChatView: View { // Brace 1 Open
     }
     // --- END fetchCurrentUserId ---
 
-    // --- Updated fetchChats Function ---
+    // --- Updated fetchChats Function (Outer wrapper unchanged) ---
     @MainActor
-    func fetchChats() async { // Brace 11 Open
-        // --- MODIFY Start of function ---
+    func fetchChats() async {
         guard isViewAuthenticated else {
             print("❌ ChatView fetchChats: View not authenticated (environment). Skipping fetch.")
             self.errorMessage = "Please log in to view chats."
@@ -240,28 +238,21 @@ struct ChatView: View { // Brace 1 Open
             self.chats = []
             return
         }
-        // --- Ensure currentUserId is available ---
         guard let currentUserId = self.currentUserId else {
             print("❌ ChatView fetchChats: Current user ID not available. Fetching...")
-            // Attempt to fetch if missing, then retry fetchChats or return
             await fetchCurrentUserId()
-            // Re-check after attempting fetch
             if self.currentUserId == nil {
                 self.errorMessage = "Could not verify user to fetch chats."
                 return
             }
-            // If fetch succeeded, use the newly fetched ID for this run
-            // This recursive call is okay here as it's guarded by isLoading
-            // await fetchChats() // Or just proceed with the fetched ID
-            // Let's proceed:
-            guard let fetchedUserId = self.currentUserId else { return } // Final check
-            await fetchChatsInternal(currentUserId: fetchedUserId) // Call internal func
-            return // Exit outer function
+            guard let fetchedUserId = self.currentUserId else { return }
+            await fetchChatsInternal(currentUserId: fetchedUserId)
+            return
         }
-        // --- END Ensure currentUserId ---
         await fetchChatsInternal(currentUserId: currentUserId)
     }
 
+    // **** THIS FUNCTION IS UPDATED ****
     // --- Internal fetch function requiring userId ---
     @MainActor
     private func fetchChatsInternal(currentUserId: UUID) async {
@@ -270,16 +261,24 @@ struct ChatView: View { // Brace 1 Open
         errorMessage = nil
         print("ChatView fetchChatsInternal: Starting fetch...")
 
-        do { // Brace 12 Open
-            struct BasicChatInfoWithRequest: Decodable, Identifiable {
+        do {
+            // --- UPDATED DECODING STRUCT ---
+            // Add the new timestamp fields here
+            struct BasicChatInfoWithDetails: Decodable, Identifiable { // Renamed for clarity
                 let id: Int
                 let requestId: Int?
                 let requesterId: UUID
                 let helperId: UUID
                 let createdAt: Date
+                // --- ADDED Fields ---
+                let offerMadeAt: Date?
+                let offerAcceptedAt: Date?
+                let helperReviewedAt: Date?
+                let requesterReviewedAt: Date?
+                // --- END ADDED ---
                 // Nested struct to decode related request data
                 struct RequestInfo: Decodable {
-                    let title: String? // Make optional in case request is deleted
+                    let title: String?
                     let imageUrl: String?
                     enum CodingKeys: String, CodingKey {
                         case title
@@ -294,63 +293,76 @@ struct ChatView: View { // Brace 1 Open
                     case requesterId = "requester_id"
                     case helperId = "helper_id"
                     case createdAt = "created_at"
+                    // --- ADDED Keys ---
+                    case offerMadeAt = "offer_made_at"
+                    case offerAcceptedAt = "offer_accepted_at"
+                    case helperReviewedAt = "helper_reviewed_at"
+                    case requesterReviewedAt = "requester_reviewed_at"
+                    // --- END ADDED ---
                     case requests // Matches the related table name
                 }
             }
+            // --- END UPDATED DECODING STRUCT ---
 
+
+            // --- UPDATED QUERY ---
             // Select chat columns AND specific columns from the related 'requests' table
+            // AND the new state columns from the 'chats' table
             let query = supabase.from("chats")
-                .select("id, request_id, requester_id, helper_id, created_at, requests(title, image_url)") // <-- JOIN query
+                .select("""
+                    id, request_id, requester_id, helper_id, created_at,
+                    offer_made_at, offer_accepted_at, helper_reviewed_at, requester_reviewed_at,
+                    requests(title, image_url)
+                """) // <-- INCLUDE new columns
                 .or("requester_id.eq.\(currentUserId),helper_id.eq.\(currentUserId)")
                 .order("created_at", ascending: false) // Keep ordering if needed
 
-            let basicChatsWithRequests: [BasicChatInfoWithRequest] = try await query.execute().value
-            // --- END MODIFY Query 1 ---
+            // Decode using the modified struct
+            let basicChatsWithDetails: [BasicChatInfoWithDetails] = try await query.execute().value
+            // --- END UPDATED QUERY ---
 
-            guard !basicChatsWithRequests.isEmpty else {
+
+            // --- Guard clause and profile fetching remain the same ---
+            guard !basicChatsWithDetails.isEmpty else {
                 self.chats = []; isLoading = false; print("No chats found for user."); return
             }
-
-            // 3. Prepare for fetching profiles and latest messages
             var otherUserIds = Set<UUID>()
-            let chatIds = basicChatsWithRequests.map { $0.id }
-            for basicChat in basicChatsWithRequests { otherUserIds.insert((basicChat.requesterId == currentUserId) ? basicChat.helperId : basicChat.requesterId) }
-
-            // Query 2: Fetch profiles
+            let chatIds = basicChatsWithDetails.map { $0.id }
+            for basicChat in basicChatsWithDetails { otherUserIds.insert((basicChat.requesterId == currentUserId) ? basicChat.helperId : basicChat.requesterId) }
             let profiles: [Profile] = try await supabase.from("profiles").select("id, username, full_name, avatar_url").in("id", value: Array(otherUserIds)).execute().value
             let profilesById = Dictionary(uniqueKeysWithValues: profiles.map { ($0.id, $0) })
+            // --- End profile fetching ---
 
-            // Query 3: Fetch latest messages
+
+            // --- Latest message fetching remains the same ---
             struct LatestMessage: Decodable {
                 let chatId: Int
                 let content: String
                 let createdAt: Date
-                let senderId: UUID // <-- ADD senderId
+                let senderId: UUID
                 enum CodingKeys: String, CodingKey {
                     case chatId = "chat_id"
                     case content
                     case createdAt = "created_at"
-                    case senderId = "sender_id" // <-- ADD mapping
+                    case senderId = "sender_id"
                 }
             }
-            // Select sender_id
             let allMessagesForChats: [LatestMessage] = try await supabase
                 .from("messages")
-                .select("chat_id, content, created_at, sender_id") // <-- SELECT sender_id
+                .select("chat_id, content, created_at, sender_id")
                 .in("chat_id", value: chatIds)
                 .order("created_at", ascending: false)
                 .execute()
                 .value
-            // --- END MODIFY Query 3 ---
-            
-            // Process latest messages client-side
             var latestMessageByChatId: [Int: LatestMessage] = [:]
             for message in allMessagesForChats { if latestMessageByChatId[message.chatId] == nil { latestMessageByChatId[message.chatId] = message } }
+            // --- End latest message fetching ---
 
-            // --- ADD Query 4: Fetch Read Statuses ---
+
+            // --- Read status fetching remains the same ---
             struct ReadStatus: Decodable {
                 let chatId: Int
-                let lastReadAt: Date? // Nullable if never read
+                let lastReadAt: Date?
                 enum CodingKeys: String, CodingKey {
                     case chatId = "chat_id"
                     case lastReadAt = "last_read_at"
@@ -359,38 +371,34 @@ struct ChatView: View { // Brace 1 Open
             let readStatuses: [ReadStatus] = try await supabase
                 .from("chat_read_status")
                 .select("chat_id, last_read_at")
-                .eq("user_id", value: currentUserId) // For the current user
-                .in("chat_id", value: chatIds) // Only for the chats being displayed
+                .eq("user_id", value: currentUserId)
+                .in("chat_id", value: chatIds)
                 .execute()
                 .value
-            // Convert to dictionary for easy lookup
             let lastReadAtByChatId = Dictionary(uniqueKeysWithValues: readStatuses.map { ($0.chatId, $0.lastReadAt) })
-            // --- END Query 4 ---
-            
-            // 4. Combine results
+            // --- End read status fetching ---
+
+
+            // --- UPDATED CHAT OBJECT CREATION ---
+            // Combine results
             var populatedChats: [Chat] = []
-            for basicChat in basicChatsWithRequests { // Brace 13 Open
+            for basicChat in basicChatsWithDetails { // Use the new struct name
                 let otherUserId = (basicChat.requesterId == currentUserId) ? basicChat.helperId : basicChat.requesterId
-                guard let otherProfile = profilesById[otherUserId] else { /* ... placeholder logic ... */ continue }
+                guard let otherProfile = profilesById[otherUserId] else { continue } // Skip if profile missing
                 let latestMsg = latestMessageByChatId[basicChat.id]
                 let lastReadTimestamp = lastReadAtByChatId[basicChat.id] ?? nil
-                
-                // --- Calculate isUnread ---
+
+                // Calculate isUnread (remains the same)
                 var unread = false
                 if let lastMsgTimestamp = latestMsg?.createdAt, latestMsg?.senderId != currentUserId {
-                    // If there's a last message, it wasn't sent by me
                     if let lastRead = lastReadTimestamp {
-                        // If read status exists, check if message is newer
-                        if lastMsgTimestamp > lastRead {
-                            unread = true
-                        }
+                        if lastMsgTimestamp > lastRead { unread = true }
                     } else {
-                        // If no read status exists, the message is definitely unread
                         unread = true
                     }
                 }
-                // --- END Calculate isUnread ---
-                
+
+                // Create the Chat object using the UPDATED initializer
                 let chat = Chat(
                     id: basicChat.id,
                     requestId: basicChat.requestId,
@@ -401,41 +409,52 @@ struct ChatView: View { // Brace 1 Open
                     requestTitle: basicChat.requests?.title,
                     requestImageUrl: basicChat.requests?.imageUrl,
                     lastMessageSenderId: latestMsg?.senderId,
-                    isUnread: unread
+                    isUnread: unread,
+                    // --- THESE ARGUMENTS MUST BE PRESENT ---
+                    requesterId: basicChat.requesterId, // Pass from fetched data
+                    helperId: basicChat.helperId,       // Pass from fetched data
+                    // --- Pass the other new fields too ---
+                    offerMadeAt: basicChat.offerMadeAt,
+                    offerAcceptedAt: basicChat.offerAcceptedAt,
+                    helperReviewedAt: basicChat.helperReviewedAt,
+                    requesterReviewedAt: basicChat.requesterReviewedAt
                 )
                 populatedChats.append(chat)
             }
+            // --- END UPDATED CHAT OBJECT CREATION ---
 
-            // Sort final list
+
+            // Sort final list (remains the same)
             self.chats = populatedChats.sorted { ($0.lastMessageTimestamp ?? $0.createdAt) > ($1.lastMessageTimestamp ?? $1.createdAt) }
-            print("Processed \(self.chats.count) chats with latest messages.")
+            print("Processed \(self.chats.count) chats with latest messages and states.")
 
-        } catch { // Brace 12 Close, Brace 16 Open
+        } catch { // Error handling remains the same
             print("❌ Error fetching chats: \(error)")
             self.errorMessage = error.localizedDescription
-        } // Brace 16 Close
+        }
         isLoading = false
-    } // Brace 11 Close
+    }
+    // **** END UPDATED fetchChatsInternal FUNCTION ****
 
-} // Brace 1 Close
+} // End ChatView struct
 
 
 // FilterButton struct (Keep as is)
-struct FilterButton: View { // Brace 17 Open
+struct FilterButton: View {
     let title: String
     let isSelected: Bool
     let action: () -> Void
-    var body: some View { // Brace 18 Open
-        Button(action: action) { // Brace 19 Open
+    var body: some View {
+        Button(action: action) {
             Text(title).padding(.vertical, 8).padding(.horizontal, 12).background(isSelected ? Color.black : Color.white).foregroundColor(isSelected ? .white : .black).cornerRadius(20).overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.gray.opacity(0.5), lineWidth: 1))
-        } // Brace 19 Close
-    } // Brace 18 Close
-} // Brace 17 Close
+        }
+    }
+}
 
 
 // Preview Provider
-#Preview { // Brace 20 Open
-    NavigationView { // Brace 21 Open
+#Preview {
+    NavigationView {
          ChatView()
-    } // Brace 21 Close
-} // Brace 20 Close
+    }
+}
