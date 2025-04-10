@@ -4,8 +4,7 @@ import SwiftUI
 import Supabase
 import CoreLocation
 
-// --- ADD THIS NEW VIEW STRUCT AT THE END OF THE FILE ---
-// (Keep the InitialMessageSheetView struct as defined previously)
+// --- InitialMessageSheetView (Keep as is) ---
 struct InitialMessageSheetView: View {
     // Input properties
     let chatId: Int
@@ -121,20 +120,17 @@ struct InitialMessageSheetView: View {
             errorMessage = "Failed to send message: \(error.localizedDescription)"
             isSending = false // Allow retry
         }
-        // --- Start: Add Debug Log ---
-        // Note: isSending should be false here unless an error occurred
         print("➡️ InitialMessageSheet: sendMessage finished. isSending = \(isSending)")
-        // --- End: Add Debug Log ---
     }
 }
-// --- END OF NEW VIEW STRUCT ---
+// --- END InitialMessageSheetView ---
 
 
 struct RequestDetailView: View {
     @Environment(\.isAuthenticatedValue) private var isViewAuthenticated
     // Input & State
     let request: RequestData
-    @State private var requesterProfile: Profile?
+    @State private var requesterProfile: Profile? // Keep state for fetched profile
     @State private var isLoadingProfile = false
     @State private var profileError: String?
     @State private var isInitiatingChat = false
@@ -148,25 +144,19 @@ struct RequestDetailView: View {
     @State private var showingConfirmation = false
 
     var body: some View {
-        // --- WRAP in ZStack for background NavigationLink ---
         ZStack {
-            // --- ADD Background NavigationLink ---
-            // This link is hidden but activated by setting chatToNavigate
+            // Background NavigationLink (Unchanged)
             NavigationLink(
-                destination: chatDestinationView, // Use computed property for destination
-                isActive: Binding( // Two-way binding to control activation
-                    get: { chatToNavigate != nil },
-                    set: { isActive in if !isActive { chatToNavigate = nil } } // Reset on dismiss
-                                 ),
-                label: { EmptyView() } // Link has no visible label
+                destination: chatDestinationView,
+                isActive: Binding( get: { chatToNavigate != nil }, set: { isActive in if !isActive { chatToNavigate = nil } } ),
+                label: { EmptyView() }
             )
-            .opacity(0) // Make it invisible
-            // --- END Background NavigationLink ---
+            .opacity(0)
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
 
-                    // --- Image Section (Keep as is) ---
+                    // Image Section (Unchanged)
                     AsyncImage(url: URL(string: request.imageUrl ?? "")) { phase in
                         switch phase {
                         case .empty: ZStack { Rectangle().fill(Color.gray.opacity(0.1)).aspectRatio(16/9, contentMode: .fit); ProgressView() }.cornerRadius(10)
@@ -176,33 +166,50 @@ struct RequestDetailView: View {
                         }
                     }
 
-                    // --- Title and Category (Keep as is) ---
+                    // Title and Category (Unchanged)
                     VStack(alignment: .leading) { Text(request.title).font(.title).fontWeight(.bold); if let category = request.category { Text(category).font(.subheadline).padding(.horizontal, 8).padding(.vertical, 4).background(Color.blue.opacity(0.1)).foregroundColor(.blue).cornerRadius(8) } }
                     Divider()
-                    // --- Description (Keep as is) ---
+                    // Description (Unchanged)
                     VStack(alignment: .leading) { Text("Description").font(.headline); Text(request.description ?? "No description provided.").font(.body).foregroundColor(.secondary) }
                     Divider()
-                    // --- Requester Info (Keep as is) ---
+
+                    // **** UPDATED: Requester Info Section ****
                     VStack(alignment: .leading) {
                         Text("Requested By").font(.headline)
-                        if isLoadingProfile { ProgressView() }
-                        else if let profile = requesterProfile {
-                            HStack {
-                                AsyncImage(url: URL(string: profile.avatarUrl ?? "")) { phase in
-                                    switch phase {
-                                    case .empty: Image(systemName: "person.circle.fill").resizable().foregroundColor(.gray).overlay(ProgressView().scaleEffect(0.5))
-                                    case .success(let image): image.resizable()
-                                    case .failure: Image(systemName: "person.circle.fill").resizable().foregroundColor(.gray)
-                                    @unknown default: EmptyView()
+                        if isLoadingProfile {
+                            ProgressView() // Show loader while fetching
+                        } else if let profile = requesterProfile {
+                            // Wrap the HStack in a NavigationLink
+                            NavigationLink(destination: ProfileView(userId: profile.id)) { // Pass requester's ID
+                                HStack { // The content of the link
+                                    AsyncImage(url: URL(string: profile.avatarUrl ?? "")) { phase in
+                                        switch phase {
+                                        case .empty: Image(systemName: "person.circle.fill").resizable().foregroundColor(.gray).overlay(ProgressView().scaleEffect(0.5))
+                                        case .success(let image): image.resizable()
+                                        case .failure: Image(systemName: "person.circle.fill").resizable().foregroundColor(.gray)
+                                        @unknown default: EmptyView()
+                                        }
                                     }
+                                    .scaledToFit().frame(width: 40, height: 40).clipShape(Circle()).overlay(Circle().stroke(Color.gray.opacity(0.2), lineWidth: 1))
+                                    VStack(alignment: .leading) {
+                                        Text(profile.fullName ?? profile.username ?? "Unknown User").fontWeight(.semibold)
+                                            .foregroundColor(Color.primary) // Ensure text is visible
+                                    }
+                                    Spacer() // Push chevron to the right if needed, or remove if just tapping row
+                                    Image(systemName: "chevron.right").foregroundColor(.secondary) // Indicate navigation
                                 }
-                                .scaledToFit().frame(width: 40, height: 40).clipShape(Circle()).overlay(Circle().stroke(Color.gray.opacity(0.2), lineWidth: 1))
-                                VStack(alignment: .leading) { Text(profile.fullName ?? profile.username ?? "Unknown User").fontWeight(.semibold) }
                             }
-                        } else { Text("User ID: \(request.userId.uuidString.prefix(8))...").foregroundColor(.gray); if let profileError { Text("Error: \(profileError)").font(.caption).foregroundColor(.red) } }
+                            .buttonStyle(.plain) // Make link look like plain content
+                        } else {
+                            // Error or placeholder state (Unchanged)
+                            Text("User ID: \(request.userId.uuidString.prefix(8))...").foregroundColor(.gray)
+                            if let profileError { Text("Error: \(profileError)").font(.caption).foregroundColor(.red) }
+                        }
                     }
+                    // **** END UPDATED Requester Info Section ****
+
                     Divider()
-                    // --- Other Details (Keep as is) ---
+                    // Other Details (Unchanged)
                     VStack(alignment: .leading, spacing: 8) {
                         HStack { Image(systemName: "calendar").foregroundColor(.blue); Text("Complete By:"); Text(request.completeBy?.formatted(date: .abbreviated, time: .shortened) ?? "Not specified") }
                         HStack { Image(systemName: "location.fill").foregroundColor(.blue); Text("Location:"); Text(request.locationText ?? "Not specified") }
@@ -211,12 +218,12 @@ struct RequestDetailView: View {
                     }
                     .font(.subheadline)
 
-                    // --- Chat Error Display (Keep as is) ---
+                    // Chat Error Display (Unchanged)
                     if let chatError { Text("Chat Error: \(chatError)").font(.caption).foregroundColor(.red).padding(.top) }
 
                     Spacer() // Push button down
 
-                    // --- Action Button (Keep as is, logic moved to initiateOrFindChat) ---
+                    // Action Button (Unchanged logic)
                     let isMyOwnRequest = (request.userId == currentUserId)
                     let requestIsClosed = !request.open
                     if !requestIsClosed {
@@ -260,17 +267,14 @@ struct RequestDetailView: View {
                 } // End Main VStack
                 .padding()
             } // End ScrollView
-        } // --- END ZStack ---
+        } // End ZStack
         .navigationTitle("Request Details")
         .navigationBarTitleDisplayMode(.inline)
-        .task { // Keep tasks for fetching user/profile
+        .task { // Fetch data (Unchanged)
             await fetchCurrentUserId()
             await fetchRequesterProfile()
         }
-        .onAppear { // Keep onAppear fetch
-            Task { await fetchCurrentUserId() }
-        }
-        // --- ADD Sheet Modifier ---
+        // .onAppear removed as fetchCurrentUserId is in .task
         .sheet(isPresented: $showingInitialMessageSheet) {
             // Ensure chatInfoForSheet is not nil before presenting
             if let chatInfo = chatInfoForSheet, let userId = currentUserId {
@@ -285,8 +289,6 @@ struct RequestDetailView: View {
                 Text("Error preparing chat sheet.")
             }
         }
-        // --- END Sheet Modifier ---
-        // --- ADD ALERT MODIFIER (iOS 15+) ---
         .alert(isPresented: $showingConfirmation) {
             Alert(
                 title: Text("Confirm Close Request"),
@@ -297,10 +299,9 @@ struct RequestDetailView: View {
                 secondaryButton: .cancel() // User cancels
             )
         }
-        // --- END ALERT MODIFIER ---
     } // End body
 
-    // --- ADD Computed Property for Navigation Destination ---
+    // chatDestinationView (Unchanged)
     @ViewBuilder
     private var chatDestinationView: some View {
         // Only construct ChatDetailView if chatToNavigate is set
@@ -311,9 +312,8 @@ struct RequestDetailView: View {
             EmptyView()
         }
     }
-    // --- END Computed Property ---
 
-    // --- fetchCurrentUserId (Keep as is) ---
+    // fetchCurrentUserId (Unchanged)
     @MainActor func fetchCurrentUserId() async {
         guard isViewAuthenticated else {
             print("❌ RequestDetailView fetchCurrentUserId: View not authenticated.")
@@ -325,11 +325,10 @@ struct RequestDetailView: View {
         } catch {
             print("❌ Error fetching current user ID: \(error)") } }
 
-    // --- fetchRequesterProfile (Keep as is) ---
+    // fetchRequesterProfile (Unchanged)
     @MainActor func fetchRequesterProfile() async { guard requesterProfile == nil, !isLoadingProfile else { return }; isLoadingProfile = true; profileError = nil; do { let profile: Profile = try await supabase.from("profiles").select().eq("id", value: request.userId).single().execute().value; self.requesterProfile = profile; print("Fetched profile for user: \(profile.username ?? profile.id.uuidString)") } catch { print("❌ Error fetching requester profile: \(error)"); self.profileError = error.localizedDescription }; isLoadingProfile = false }
 
-    // **** THIS FUNCTION IS UPDATED ****
-    // --- REPLACE initiateOrFindChat function ---
+    // initiateOrFindChat (Unchanged)
     @MainActor
     func initiateOrFindChat() async {
         guard isViewAuthenticated else {
@@ -476,9 +475,9 @@ struct RequestDetailView: View {
         isInitiatingChat = false
         print("➡️ initiateOrFindChat: Finished. isInitiatingChat = \(isInitiatingChat)")
     }
-    // --- END REPLACE initiateOrFindChat ---
+    // --- END initiateOrFindChat ---
 
-    // --- closeRequest (Unchanged) ---
+    // closeRequest (Unchanged)
     @MainActor
     func closeRequest() async {
         guard isViewAuthenticated else {

@@ -3,23 +3,10 @@
 import SwiftUI
 import Supabase
 
-// MARK: - Models (Local or Shared)
-
-// Date Formatter
-let dateFormatter: DateFormatter = {
-    let formatter = DateFormatter()
-    formatter.dateStyle = .medium
-    return formatter
-}()
-
-
-
-// MARK: - Card Views (Local to ProfileView for now)
-
-// RequestCardView - Uses RequestData
-struct RequestCardView: View {
+// MARK: - Card Views (Keep as they are)
+struct RequestCardView: View { /* ... No changes needed ... */
     let request: RequestData
-
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             AsyncImage(url: URL(string: request.imageUrl ?? "")) { phase in
@@ -31,7 +18,7 @@ struct RequestCardView: View {
                 }
             }
             .frame(height: 150).clipped()
-
+            
             VStack(alignment: .leading, spacing: 8) {
                 Text(request.title).font(.headline).fontWeight(.semibold).lineLimit(1)
                 Text(request.description ?? "No description").font(.body).lineLimit(2).foregroundColor(.secondary)
@@ -43,11 +30,9 @@ struct RequestCardView: View {
     }
 }
 
-// ReviewCardView
-// **** THIS STRUCT IS UPDATED ****
-struct ReviewCardView: View {
+struct ReviewCardView: View { /* ... No changes needed ... */
     let review: Review
-
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top) {
@@ -65,10 +50,8 @@ struct ReviewCardView: View {
                     }
                 }
                 VStack(alignment: .leading, spacing: 4) {
-                    // --- CHANGE HERE: Use nil-coalescing ---
                     Text(review.reviewerName ?? "Unknown User") // Provide default value
                         .font(.headline).fontWeight(.bold)
-                    // --- END CHANGE ---
                     HStack(spacing: 2) { ForEach(0..<5) { index in Image(systemName: index < review.rating ? "star.fill" : "star").foregroundColor(index < review.rating ? .yellow : .gray) } }
                     Text(review.description ?? "No comment") // Use 'description' as per your preference, provide default
                         .font(.body).lineLimit(2).foregroundColor(.secondary)
@@ -78,23 +61,22 @@ struct ReviewCardView: View {
         .padding().frame(width: 250, alignment: .leading).background(Color(.systemGray6)).cornerRadius(10).shadow(color: Color.black.opacity(0.1), radius: 5, x: 0, y: 2)
     }
 }
-// **** END UPDATED ReviewCardView ****
 
-// MARK: - Detailed List Views (Local to ProfileView for now)
-struct AllHelpRequestsView: View {
+// MARK: - Detailed List Views (Keep as they are)
+struct AllHelpRequestsView: View { /* ... No changes needed ... */
     let helpRequests: [RequestData]
-
+    
     let columns: [GridItem] = [
         GridItem(.flexible()),
         GridItem(.flexible()),
     ]
-
+    
     var body: some View {
         VStack {
             Text("All Requests")
                 .font(.title)
                 .fontWeight(.bold)
-
+            
             Spacer()
             // List of requests for this category
             if helpRequests.isEmpty {
@@ -119,9 +101,7 @@ struct AllHelpRequestsView: View {
     }
 }
 
-// AllReviewsView
-// **** THIS STRUCT IS UPDATED ****
-struct AllReviewsView: View {
+struct AllReviewsView: View { /* ... No changes needed ... */
     let reviews: [Review] // From this view or a function
 
     var body: some View {
@@ -143,10 +123,8 @@ struct AllReviewsView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 4) {
-                        // --- CHANGE HERE: Use nil-coalescing ---
                         Text(review.reviewerName ?? "Unknown User") // Provide default value
                             .fontWeight(.bold)
-                        // --- END CHANGE ---
 
                         HStack(spacing: 2) {
                             ForEach(0..<5, id: \.self) { index in
@@ -166,319 +144,326 @@ struct AllReviewsView: View {
         .navigationTitle("All Reviews")
     }
 }
-// **** END UPDATED AllReviewsView ****
 
-// MARK: - Main Profile View (Updated)
+// MARK: - Main Profile View (Refactored)
 
-struct ProfileView: View { // Brace 1 Open
+struct ProfileView: View {
+    // **** ADDED: Input User ID (Optional) ****
+    let userId: UUID? // If nil, show logged-in user's profile
+
     // State for fetched data
-    @State private var userProfile: Profile? = nil
+    @State private var profileToDisplay: Profile? = nil // Renamed from userProfile
     @State private var userRequests: [RequestData] = []
-    @State private var isLoading = false
-    @State private var errorMessage: String?
-
     @State private var reviews: [Review] = []
-    @State private var isLoadingReviews = false
+    @State private var isLoading = true // Start as true
+    @State private var errorMessage: String?
+    @State private var isLoadingReviews = false // Keep separate loading for reviews
     @State private var reviewsError: String?
 
-    var body: some View { // Brace 2 Open
-        VStack(spacing: 0) { // Brace 3 Open
-            // Handle Loading/Error States for Profile
-            if isLoading { // Brace 4 Open
+    // **** ADDED: State to store logged-in user ID ****
+    @State private var loggedInUserId: UUID? = nil
+
+    // Computed property to determine which user ID to load data for
+    private var targetUserId: UUID? {
+        userId ?? loggedInUserId // Use provided userId if available, otherwise loggedInUserId
+    }
+
+    // Computed property to check if viewing own profile
+    private var isViewingOwnProfile: Bool {
+        guard let target = targetUserId, let loggedIn = loggedInUserId else {
+            // If either is nil, we can't be sure, default to false (safer)
+            // Or if userId input is nil, it implies own profile
+            return userId == nil
+        }
+        return target == loggedIn
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Handle Loading/Error States
+            if isLoading {
                 ProgressView("Loading Profile...")
                     .frame(maxHeight: .infinity)
-            } else if let errorMessage { // Brace 4 Close, Brace 5 Open
-                VStack { // Brace 6 Open
+            } else if let errorMessage {
+                VStack {
                     Text("Error loading profile:")
                     Text(errorMessage).foregroundColor(.red).font(.caption)
-                    Button("Retry") { Task { await loadProfileData() } }
+                    Button("Retry") { Task { await loadData() } } // Call combined loadData
                         .padding(.top)
-                } // Brace 6 Close
+                }
                 .frame(maxHeight: .infinity)
-            } else if let profile = userProfile { // Brace 5 Close, Brace 7 Open
+            } else if let profile = profileToDisplay { // Use renamed state variable
                 // Main content once profile is loaded
-                ScrollView { // Brace 8 Open
-                    VStack(alignment: .leading, spacing: 24) { // Brace 9 Open
-                        // --- Profile Header Updated ---
-                        HStack(alignment: .center, spacing: 16) { // Brace 10 Open
-                            // Use AsyncImage for Avatar
-                            AsyncImage(url: URL(string: profile.avatarUrl ?? "")) { phase in
-                                switch phase {
-                                case .empty:
-                                    Image(systemName: "person.crop.circle.fill")
-                                        .resizable().foregroundColor(.gray)
-                                        .overlay(ProgressView().scaleEffect(0.8)) // Small progress
-                                case .success(let image):
-                                    image.resizable()
-                                case .failure:
-                                    Image(systemName: "person.crop.circle.fill")
-                                        .resizable().foregroundColor(.gray)
-                                @unknown default:
-                                    EmptyView()
-                                }
-                            }
-                            .aspectRatio(contentMode: .fill) // Changed to fill
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 24) {
+                        // --- Profile Header ---
+                        HStack(alignment: .center, spacing: 16) {
+                            AsyncImage(url: URL(string: profile.avatarUrl ?? "")) { phase in /* ... */ } // Use profile.avatarUrl
+                            .aspectRatio(contentMode: .fill)
                             .frame(width: 80, height: 80)
                             .clipShape(Circle())
-                            .overlay(Circle().stroke(Color.gray.opacity(0.2), lineWidth: 1)) // Subtle border
+                            .overlay(Circle().stroke(Color.gray.opacity(0.2), lineWidth: 1))
 
-                            VStack(alignment: .leading, spacing: 4) { // Brace 11 Open
-                                Text(profile.fullName ?? "No Name") // Use fetched name
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(profile.fullName ?? "No Name") // Use profile.fullName
                                     .font(.title)
                                     .fontWeight(.bold)
-                                Text("@\(profile.username ?? "no_username")") // Use fetched username
+                                Text("@\(profile.username ?? "no_username")") // Use profile.username
                                     .font(.subheadline)
                                     .foregroundColor(.gray)
-                                // TODO: Calculate Average Rating later
                                 Text("No rating yet") // Placeholder rating
                                     .font(.caption)
                                     .foregroundColor(.gray)
-                            } // Brace 11 Close
-
-                            Spacer() // Push Edit Profile button to the right
-
-                            NavigationLink(destination: EditProfileView(onProfileUpdated: {
-                                // Refresh profile data when EditProfileView updates it
-                                Task { await loadProfileData() }
-                            })) {
-                                Text("Edit Profile")
-                                    .font(.subheadline) // Make button less prominent
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 5)
-                                    .overlay(Capsule().stroke(Color.blue, lineWidth: 1))
                             }
-                        } // Brace 10 Close
-                        .padding(.horizontal)
-                        // --- End Profile Header Update ---
 
-                        // Requests Section Header
-                        HStack { // Brace 12 Open
-                            Text("My Requests") // Changed title
+                            Spacer()
+
+                            // **** ADDED: Conditional Edit Button ****
+                            if isViewingOwnProfile {
+                                NavigationLink(destination: EditProfileView(onProfileUpdated: {
+                                    // Refresh profile data when EditProfileView updates it
+                                    Task { await loadData() } // Call combined loadData
+                                })) {
+                                    Text("Edit Profile")
+                                        .font(.subheadline)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 5)
+                                        .overlay(Capsule().stroke(Color.blue, lineWidth: 1))
+                                }
+                            }
+                            // **** END Conditional Edit Button ****
+                        }
+                        .padding(.horizontal)
+                        // --- End Profile Header ---
+
+                        // Requests Section (Unchanged logic, uses userRequests state)
+                        HStack {
+                            Text(isViewingOwnProfile ? "My Requests" : "Requests") // Adjust title
                                 .font(.title2)
                                 .fontWeight(.semibold)
                             Spacer()
-                            // Only show "See All" if there are requests
-                            if !userRequests.isEmpty { // Brace 13 Open
+                            if !userRequests.isEmpty {
                                 NavigationLink(destination: AllHelpRequestsView(helpRequests: userRequests)) {
                                     Text("See All")
                                         .foregroundColor(.blue)
                                 }
-                            } // Brace 13 Close
-                        } // Brace 12 Close
+                            }
+                        }
                         .padding(.horizontal)
 
-                        // Horizontally scrolling Requests - Use fetched data
-                        if userRequests.isEmpty { // Brace 14 Open
-                            Text("You haven't posted any requests yet.")
+                        if userRequests.isEmpty {
+                            Text(isViewingOwnProfile ? "You haven't posted any requests yet." : "This user hasn't posted any requests yet.")
                                 .font(.caption)
                                 .foregroundColor(.gray)
                                 .padding(.horizontal)
-                        } else { // Brace 14 Close, Brace 15 Open
-                            ScrollView(.horizontal, showsIndicators: false) { // Brace 16 Open
-                                HStack(spacing: 16) { // Brace 17 Open
-                                    // Sort by creation date descending
-                                    ForEach(userRequests.sorted { $0.createdAt > $1.createdAt }) { req in // Brace 18 Open
-                                        // Link to RequestDetailView
+                        } else {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 16) {
+                                    ForEach(userRequests.sorted { $0.createdAt > $1.createdAt }) { req in
                                         NavigationLink(destination: RequestDetailView(request: req)) {
                                             RequestCardView(request: req)
                                         }
-                                        .buttonStyle(PlainButtonStyle()) // Use plain style for the link
-                                    } // Brace 18 Close
-                                } // Brace 17 Close
+                                        .buttonStyle(PlainButtonStyle())
+                                    }
+                                }
                                 .padding(.horizontal)
-                            } // Brace 16 Close
-                        } // Brace 15 Close
+                            }
+                        }
 
-                        // Reviews Section Header
-                        HStack { // Brace 19 Open
+                        // Reviews Section (Unchanged logic, uses reviews state)
+                        HStack {
                             Text("Reviews")
                                 .font(.title2)
                                 .fontWeight(.semibold)
                             Spacer()
-                            // Only show "See All" if there are reviews
-                            if !reviews.isEmpty { // Brace 20 Open
+                            if !reviews.isEmpty {
                                 NavigationLink(destination: AllReviewsView(reviews: reviews)) {
                                     Text("See All")
                                         .foregroundColor(.blue)
                                 }
-                            } // Brace 20 Close
-                        } // Brace 19 Close
+                            }
+                        }
                         .padding(.horizontal)
 
-                        // Horizontally scrolling Reviews
-                        if isLoadingReviews { // Show loader while reviews are loading
+                        if isLoadingReviews {
                             ProgressView().padding(.horizontal)
-                        } else if let reviewsError { // Show error if loading failed
+                        } else if let reviewsError {
                             Text("Error loading reviews: \(reviewsError)")
                                 .font(.caption).foregroundColor(.red).padding(.horizontal)
-                        } else if reviews.isEmpty { // Brace 21 Open
-                            Text("You haven't received any reviews yet.")
+                        } else if reviews.isEmpty {
+                            Text(isViewingOwnProfile ? "You haven't received any reviews yet." : "This user hasn't received any reviews yet.")
                                 .font(.caption)
                                 .foregroundColor(.gray)
                                 .padding(.horizontal)
-                        } else { // Brace 21 Close, Brace 22 Open
-                            ScrollView(.horizontal, showsIndicators: false) { // Brace 23 Open
-                                HStack(spacing: 16) { // Brace 24 Open
-                                    ForEach(reviews) { review in // Brace 25 Open
+                        } else {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 16) {
+                                    ForEach(reviews) { review in
                                         ReviewCardView(review: review)
-                                    } // Brace 25 Close
-                                } // Brace 24 Close
+                                    }
+                                }
                                 .padding(.horizontal)
-                            } // Brace 23 Close
-                        } // Brace 22 Close
+                            }
+                        }
 
-                    } // Brace 9 Close
+                    } // End Main VStack
                     .padding(.vertical)
-                } // Brace 8 Close
-            } else { // Brace 7 Close
+                } // End ScrollView
+            } else {
                 // Fallback if profile is somehow nil after loading without error
                 Text("Could not load profile.")
                     .frame(maxHeight: .infinity)
             }
-        } // Brace 3 Close
-        .navigationTitle("Profile") // Set title here
+        } // End Outer VStack
+        .navigationTitle("Profile") // Keep generic title or adjust based on isViewingOwnProfile
         .navigationBarTitleDisplayMode(.inline)
-        .task { // Fetch data when view appears
-            await loadProfileData()
-            await loadReviews() // Call the Review task
-        } // Brace 26
-    } // Brace 2 Close
+        // **** UPDATED .task Modifier ****
+        .task(id: userId) { // Re-run when the input userId changes
+            await loadData()
+        }
+        // **** END UPDATED .task ****
+    } // End body
 
-    // Function to load profile and requests
+    // **** ADDED: Combined Data Loading Function ****
     @MainActor
-    func loadProfileData() async { // Brace 27 Open
-        isLoading = true; errorMessage = nil
-        do { // Brace 28 Open
-            let userId = try await supabase.auth.session.user.id
-            async let profileFetch: Profile = supabase.from("profiles").select().eq("id", value: userId).single().execute().value
-            async let requestsFetch: [RequestData] = supabase.from("requests").select().eq("user_id", value: userId).order("created_at", ascending: false).execute().value
-            let (profileResult, requestsResult) = try await (profileFetch, requestsFetch)
-            self.userProfile = profileResult; self.userRequests = requestsResult
-            print("Fetched profile for \(profileResult.username ?? "user") and \(requestsResult.count) requests.")
-        } catch { // Brace 28 Close, Brace 29 Open
-            print("❌ Error loading profile data: \(error)"); self.errorMessage = error.localizedDescription; self.userProfile = nil; self.userRequests = []
-        } // Brace 29 Close
-        isLoading = false
-    } // Brace 27 Close
+    func loadData() async {
+        isLoading = true
+        errorMessage = nil
+        reviewsError = nil // Clear review error too
+        profileToDisplay = nil // Clear previous profile
+        userRequests = []
+        reviews = []
 
-    //Reviews Data Call
-    // Inside ProfileView.swift
-
-    // **** REPLACE THIS ENTIRE FUNCTION ****
-    @MainActor
-    func loadReviews() async {
-
-        guard !isLoadingReviews else {
-            print("Skipping review fetch: Already loading reviews.")
-                return
+        // 1. Get logged-in user ID if needed
+        if loggedInUserId == nil {
+            do {
+                loggedInUserId = try await supabase.auth.session.user.id
+            } catch {
+                print("❌ Error fetching loggedInUserId: \(error)")
+                errorMessage = "Could not verify current user session."
+                isLoading = false
+                return // Stop if we can't get logged-in user ID
+            }
         }
 
-        isLoadingReviews = true
-        reviewsError = nil
-        print("➡️ loadReviews: Starting fetch...") // Log start
+        // 2. Determine the target user ID
+        guard let idToLoad = targetUserId else {
+            print("❌ Error: No target user ID available to load profile.")
+            errorMessage = "Cannot determine which profile to load."
+            isLoading = false
+            return
+        }
+        print("➡️ Loading profile data for user ID: \(idToLoad)")
 
+        // 3. Fetch Profile and Requests concurrently
         do {
-            // 1. Get the current user's ID
-            let userId = try await supabase.auth.session.user.id
-            print("➡️ loadReviews: Fetching reviews for user ID: \(userId)")
-
-            // 2. Define the struct to decode the joined data
-            //    This needs to match the structure returned by the SELECT query
-            struct ReviewWithReviewer: Decodable, Identifiable {
-                let id: UUID
-                let chatId: Int
-                let requestId: Int?
-                let reviewerId: UUID // Matches 'reviewerid' column
-                let revieweeId: UUID // Matches 'revieweeid' column
-                let rating: Int
-                let description: String? // Matches 'description' column
-                let createdAt: Date
-                // Nested struct to hold the joined reviewer profile data
-                struct ReviewerProfile: Decodable {
-                    let fullName: String?
-                    let avatarUrl: String?
-                    enum CodingKeys: String, CodingKey {
-                        case fullName = "full_name"
-                        case avatarUrl = "avatar_url"
-                    }
-                }
-                let reviewer: ReviewerProfile? // Matches the alias 'reviewer' in SELECT
-
-                enum CodingKeys: String, CodingKey {
-                    case id
-                    case chatId = "chat_id"
-                    case requestId = "request_id"
-                    case reviewerId = "reviewerid"
-                    case revieweeId = "revieweeid"
-                    case rating
-                    case description
-                    case createdAt = "created_at"
-                    case reviewer // Matches the alias 'reviewer' used in SELECT
-                }
-            }
-
-            // 3. Perform the query joining reviews and profiles
-            print("➡️ loadReviews: Executing query to fetch reviews with reviewer profiles...")
-            let fetchedReviewsWithProfile: [ReviewWithReviewer] = try await supabase.from("reviews")
-                .select("""
-                    id,
-                    chat_id,
-                    request_id,
-                    reviewerid,
-                    revieweeid,
-                    rating,
-                    description,
-                    created_at,
-                    reviewer:reviewerid ( full_name, avatar_url )
-                """) // Select review fields and join profile data for reviewerid aliased as 'reviewer'
-                .eq("revieweeid", value: userId) // Filter for reviews ABOUT the current user
-                .order("created_at", ascending: false) // Show newest reviews first
+            async let profileFetch: Profile = supabase.from("profiles")
+                .select()
+                .eq("id", value: idToLoad) // Use idToLoad
+                .single()
                 .execute()
                 .value
 
-            print("➡️ loadReviews: Query returned \(fetchedReviewsWithProfile.count) raw review records.")
+            async let requestsFetch: [RequestData] = supabase.from("requests")
+                .select()
+                .eq("user_id", value: idToLoad) // Use idToLoad
+                .order("created_at", ascending: false)
+                .execute()
+                .value
 
-            // 4. Map the fetched data to the Review model used by the UI
-            self.reviews = fetchedReviewsWithProfile.map { fetchedReview -> Review in
-                // Create the Review object, populating reviewerName/ImageUrl from the joined data
-                return Review(
-                    id: fetchedReview.id,
-                    chatId: fetchedReview.chatId,
-                    requestId: fetchedReview.requestId,
-                    reviewerId: fetchedReview.reviewerId,
-                    revieweeId: fetchedReview.revieweeId,
-                    rating: fetchedReview.rating,
-                    description: fetchedReview.description,
-                    createdAt: fetchedReview.createdAt,
-                    // Populate from the nested 'reviewer' data
-                    reviewerName: fetchedReview.reviewer?.fullName,
-                    reviewerImageUrl: fetchedReview.reviewer?.avatarUrl
-                )
+            let (profileResult, requestsResult) = try await (profileFetch, requestsFetch)
+            self.profileToDisplay = profileResult
+            self.userRequests = requestsResult
+            print("   ✅ Fetched profile: \(profileResult.username ?? "N/A")")
+            print("   ✅ Fetched \(requestsResult.count) requests.")
+
+        } catch {
+            print("❌ Error loading profile/requests data: \(error)")
+            self.errorMessage = error.localizedDescription
+            // Don't clear profile/requests here, let error message show
+        }
+
+        // 4. Fetch Reviews (can happen after profile/requests)
+        await loadReviews(for: idToLoad) // Pass the target ID
+
+        isLoading = false // Mark main loading as finished
+    }
+    // **** END Combined Data Loading Function ****
+
+
+    // **** UPDATED: loadReviews Function ****
+    @MainActor
+    func loadReviews(for userIdToLoad: UUID) async { // Accept target user ID
+        guard !isLoadingReviews else { return }
+        isLoadingReviews = true
+        reviewsError = nil
+        print("➡️ loadReviews: Starting fetch for reviewee ID: \(userIdToLoad)")
+
+        do {
+            // Define struct for decoding joined data
+            struct ReviewWithReviewer: Decodable, Identifiable { /* ... as before ... */
+                let id: UUID; let chatId: Int; let requestId: Int?; let reviewerId: UUID
+                let revieweeId: UUID; let rating: Int; let description: String?; let createdAt: Date
+                struct ReviewerProfile: Decodable { let fullName: String?; let avatarUrl: String?
+                    enum CodingKeys: String, CodingKey { case fullName = "full_name"; case avatarUrl = "avatar_url" }
+                }
+                let reviewer: ReviewerProfile?
+                enum CodingKeys: String, CodingKey {
+                    case id; case chatId = "chat_id"; case requestId = "request_id"
+                    case reviewerId = "reviewerid"; case revieweeId = "revieweeid"
+                    case rating; case description; case createdAt = "created_at"; case reviewer
+                }
             }
 
+            // Perform query joining reviews and profiles
+            let fetchedReviewsWithProfile: [ReviewWithReviewer] = try await supabase.from("reviews")
+                 .select("*, reviewer:reviewerid ( full_name, avatar_url )")
+                 .eq("revieweeid", value: userIdToLoad) // Use userIdToLoad
+                 .order("created_at", ascending: false)
+                 .execute()
+                 .value
+
+            // Map fetched data to the Review model
+            self.reviews = fetchedReviewsWithProfile.map { fetchedReview -> Review in
+                 return Review(
+                     id: fetchedReview.id, chatId: fetchedReview.chatId, requestId: fetchedReview.requestId,
+                     reviewerId: fetchedReview.reviewerId, revieweeId: fetchedReview.revieweeId,
+                     rating: fetchedReview.rating, description: fetchedReview.description, createdAt: fetchedReview.createdAt,
+                     reviewerName: fetchedReview.reviewer?.fullName, reviewerImageUrl: fetchedReview.reviewer?.avatarUrl
+                 )
+             }
             print("✅ loadReviews: Successfully processed \(self.reviews.count) reviews.")
 
         } catch {
             print("❌ loadReviews: Error fetching reviews - \(error)")
-            // Provide more context if it's a decoding error
-            if let decodingError = error as? DecodingError {
-                print("--> Decoding Error Details: \(decodingError)")
-                reviewsError = "Failed to process review data. (\(error.localizedDescription))"
-            } else {
-                reviewsError = "Failed to load reviews: \(error.localizedDescription)"
-            }
-             self.reviews = [] // Clear reviews on error
+            self.reviewsError = error.localizedDescription
+            self.reviews = [] // Clear reviews on error
         }
-
         isLoadingReviews = false
-        print("➡️ loadReviews: Finished.")
     }
-    // **** END REPLACEMENT FUNCTION ****
+    // **** END UPDATED loadReviews Function ****
 
-} // Brace 1 Close
+    // --- REMOVED loadProfileData function (logic merged into loadData) ---
+
+} // End ProfileView struct
 
 #Preview {
+    // Preview logged-in user's profile
     NavigationView {
-        ProfileView()
+        ProfileView(userId: nil) // Pass nil to show logged-in user
+    }
+}
+
+// Add a preview for viewing someone else's profile (optional)
+#Preview("Other User Profile") {
+    // Create a dummy UUID for preview
+    let otherUserId = UUID()
+    // Create a dummy profile to display initially (or show loading)
+    let dummyProfile = Profile(id: otherUserId, username: "otherUser", fullName: "Other User Name", website: nil, avatarUrl: nil)
+
+    return NavigationView {
+        ProfileView(userId: otherUserId) // Pass the dummy ID
+            // You might inject dummy data here for preview purposes if needed
+            // .environmentObject(createDummyViewModel(for: otherUserId))
     }
 }
