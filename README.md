@@ -1,3 +1,5 @@
+<img src="screenshots/neighbourly (1).png" alt="All" width="700"> 
+
 # Neighbourly
 
 Neighbourly is a community-driven application designed to connect locals who need assistance with those willing to help. Whether it's running errands, grocery shopping, or household chores, Neighbourly fosters a culture of mutual support and strengthens community bonds.
@@ -9,15 +11,11 @@ Neighbourly is a community-driven application designed to connect locals who nee
 - **Rating System**: Ensures credibility and filters out problematic users.
 - **Notifications**: Real-time updates when assistance is needed nearby.
 
-## Screenshots
-### Login Page &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;Home Page
-<img src="screenshots/Login.png" alt="Login" width="300"> <img src="screenshots/HomePageView.png" alt="Home Page" width="300">
+<img src="screenshots/Apple iPhone 16 Pro Screenshot 1.png" alt="1" width="300"> <img src="screenshots/Apple iPhone 16 Pro Screenshot 2.png" alt="2" width="300">
 
-### Request Page &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; Chats Page
-<img src="screenshots/Request.png" alt="Request Page" width="300"> <img src="screenshots/Chats.png" alt="Chats Page" width="300">
+<img src="screenshots/Apple iPhone 16 Pro Screenshot 3.png" alt="3" width="300"> <img src="screenshots/Apple iPhone 16 Pro Screenshot 4.png" alt="4" width="300">
 
-### Profile Page
-<img src="screenshots/Profile.png" alt="Profile Page" width="300">
+<img src="screenshots/Apple iPhone 16 Pro Screenshot 5.png" alt="5" width="300"> <img src="screenshots/Apple iPhone 16 Pro Screenshot 6.png" alt="6" width="300">
 
 ## Problem Statement
 Many individuals, including busy parents, the elderly, the disabled, and the sick, struggle with everyday tasks due to their circumstances. The lack of accessible help leads to stress, reduced quality of life, and safety concerns.
