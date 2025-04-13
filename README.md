@@ -1,4 +1,4 @@
-<img src="screenshots/neighbourly (1).png" alt="All" width="700"> 
+<img src="screenshots/neighbourly (1).png" alt="All" width="800"> 
 
 # Neighbourly
 
